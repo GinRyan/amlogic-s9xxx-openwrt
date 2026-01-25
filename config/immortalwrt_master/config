@@ -2153,7 +2153,7 @@ CONFIG_PACKAGE_rtl8761bu-firmware=y
 # CONFIG_PACKAGE_rtl8814a-firmware is not set
 # CONFIG_PACKAGE_rtl8821a-firmware is not set
 CONFIG_PACKAGE_rtl8821ae-firmware=y
-# CONFIG_PACKAGE_rtl8821ce-firmware is not set
+CONFIG_PACKAGE_rtl8821ce-firmware=y
 CONFIG_PACKAGE_rtl8822be-firmware=y
 CONFIG_PACKAGE_rtl8822ce-firmware=y
 # CONFIG_PACKAGE_rtl8851be-firmware is not set
@@ -3204,9 +3204,9 @@ CONFIG_PACKAGE_kmod-usbmon=y
 #
 # Wireless Drivers
 #
-# CONFIG_PACKAGE_kmod-aic8800-pcie is not set
+CONFIG_PACKAGE_kmod-aic8800-pcie=y
 # CONFIG_PACKAGE_kmod-aic8800-sdio is not set
-# CONFIG_PACKAGE_kmod-aic8800-usb is not set
+CONFIG_PACKAGE_kmod-aic8800-usb=y
 # CONFIG_PACKAGE_kmod-ar5523 is not set
 CONFIG_PACKAGE_kmod-ath=y
 CONFIG_ATH_USER_REGD=y
@@ -3276,11 +3276,11 @@ CONFIG_PACKAGE_kmod-mt76x2u=y
 # CONFIG_PACKAGE_kmod-mt7915-firmware is not set
 CONFIG_PACKAGE_kmod-mt7915e=y
 CONFIG_PACKAGE_kmod-mt7916-firmware=y
-# CONFIG_PACKAGE_kmod-mt7921-firmware is not set
+CONFIG_PACKAGE_kmod-mt7921-firmware=y
 # CONFIG_PACKAGE_kmod-mt7921e is not set
 # CONFIG_PACKAGE_kmod-mt7921s is not set
-# CONFIG_PACKAGE_kmod-mt7921u is not set
-# CONFIG_PACKAGE_kmod-mt7922-firmware is not set
+CONFIG_PACKAGE_kmod-mt7921u=y
+CONFIG_PACKAGE_kmod-mt7922-firmware=y
 # CONFIG_PACKAGE_kmod-mt7925-firmware is not set
 # CONFIG_PACKAGE_kmod-mt7925e is not set
 # CONFIG_PACKAGE_kmod-mt7925u is not set
@@ -3308,7 +3308,7 @@ CONFIG_PACKAGE_kmod-rt2x00-pci=y
 CONFIG_PACKAGE_kmod-rt2x00-usb=y
 # CONFIG_PACKAGE_kmod-rt61-pci is not set
 # CONFIG_PACKAGE_kmod-rt73-usb is not set
-# CONFIG_PACKAGE_kmod-rtl8188eu is not set
+CONFIG_PACKAGE_kmod-rtl8188eu=y
 # CONFIG_PACKAGE_kmod-rtl8189es is not set
 CONFIG_PACKAGE_kmod-rtl8192c-common=y
 CONFIG_PACKAGE_kmod-rtl8192ce=y
@@ -3319,7 +3319,7 @@ CONFIG_PACKAGE_kmod-rtl8192de=y
 CONFIG_PACKAGE_kmod-rtl8192se=y
 # CONFIG_PACKAGE_kmod-rtl8723be is not set
 # CONFIG_PACKAGE_kmod-rtl8723bs is not set
-# CONFIG_PACKAGE_kmod-rtl8812au-ct is not set
+CONFIG_PACKAGE_kmod-rtl8812au-ct=y
 CONFIG_PACKAGE_kmod-rtl8821ae=y
 CONFIG_PACKAGE_kmod-rtl8xxxu=y
 CONFIG_PACKAGE_kmod-rtlwifi=y
@@ -3329,23 +3329,23 @@ CONFIG_PACKAGE_kmod-rtlwifi-pci=y
 CONFIG_PACKAGE_kmod-rtlwifi-usb=y
 # CONFIG_PACKAGE_kmod-rtw88-8723de is not set
 # CONFIG_PACKAGE_kmod-rtw88-8723ds is not set
-# CONFIG_PACKAGE_kmod-rtw88-8723du is not set
-# CONFIG_PACKAGE_kmod-rtw88-8812au is not set
-# CONFIG_PACKAGE_kmod-rtw88-8814ae is not set
-# CONFIG_PACKAGE_kmod-rtw88-8814au is not set
-# CONFIG_PACKAGE_kmod-rtw88-8821au is not set
-# CONFIG_PACKAGE_kmod-rtw88-8821ce is not set
-# CONFIG_PACKAGE_kmod-rtw88-8821cu is not set
-# CONFIG_PACKAGE_kmod-rtw88-8822be is not set
-# CONFIG_PACKAGE_kmod-rtw88-8822bu is not set
-# CONFIG_PACKAGE_kmod-rtw88-8822ce is not set
-# CONFIG_PACKAGE_kmod-rtw88-8822cs is not set
-# CONFIG_PACKAGE_kmod-rtw88-8822cu is not set
-# CONFIG_PACKAGE_kmod-rtw89-8851be is not set
-# CONFIG_PACKAGE_kmod-rtw89-8852ae is not set
-# CONFIG_PACKAGE_kmod-rtw89-8852be is not set
-# CONFIG_PACKAGE_kmod-rtw89-8852ce is not set
-# CONFIG_PACKAGE_kmod-rtw89-8922ae is not set
+CONFIG_PACKAGE_kmod-rtw88-8723du=y
+CONFIG_PACKAGE_kmod-rtw88-8812au=y
+CONFIG_PACKAGE_kmod-rtw88-8814ae=y
+CONFIG_PACKAGE_kmod-rtw88-8814au=y
+CONFIG_PACKAGE_kmod-rtw88-8821au=y
+CONFIG_PACKAGE_kmod-rtw88-8821ce=y
+CONFIG_PACKAGE_kmod-rtw88-8821cu=y
+CONFIG_PACKAGE_kmod-rtw88-8822be=y
+CONFIG_PACKAGE_kmod-rtw88-8822bu=y
+CONFIG_PACKAGE_kmod-rtw88-8822ce=y
+CONFIG_PACKAGE_kmod-rtw88-8822cs is not set
+CONFIG_PACKAGE_kmod-rtw88-8822cu=y
+CONFIG_PACKAGE_kmod-rtw89-8851be=y
+CONFIG_PACKAGE_kmod-rtw89-8852ae=y
+CONFIG_PACKAGE_kmod-rtw89-8852be=y
+CONFIG_PACKAGE_kmod-rtw89-8852ce=y
+CONFIG_PACKAGE_kmod-rtw89-8922ae=y
 # CONFIG_PACKAGE_kmod-wil6210 is not set
 # CONFIG_PACKAGE_kmod-wl12xx is not set
 # CONFIG_PACKAGE_kmod-wl18xx is not set
@@ -5629,7 +5629,7 @@ CONFIG_PACKAGE_luci-app-amlogic=y
 # CONFIG_PACKAGE_luci-app-antiblock is not set
 # CONFIG_PACKAGE_luci-app-apinger is not set
 # CONFIG_PACKAGE_luci-app-appfilter is not set
-# CONFIG_PACKAGE_luci-app-argon-config is not set
+CONFIG_PACKAGE_luci-app-argon-config=y
 # CONFIG_PACKAGE_luci-app-aria2 is not set
 # CONFIG_PACKAGE_luci-app-arpbind is not set
 CONFIG_PACKAGE_luci-app-attendedsysupgrade=y
@@ -5659,7 +5659,7 @@ CONFIG_PACKAGE_luci-app-diskman=y
 CONFIG_PACKAGE_luci-app-diskman_INCLUDE_btrfs_progs=y
 CONFIG_PACKAGE_luci-app-diskman_INCLUDE_lsblk=y
 # CONFIG_PACKAGE_luci-app-diskman_INCLUDE_mdadm is not set
-# CONFIG_PACKAGE_luci-app-docker is not set
+CONFIG_PACKAGE_luci-app-docker=y
 # CONFIG_PACKAGE_luci-app-dockerman is not set
 # CONFIG_PACKAGE_luci-app-dufs is not set
 # CONFIG_PACKAGE_luci-app-dump1090 is not set
@@ -5713,35 +5713,35 @@ CONFIG_PACKAGE_luci-app-frps=y
 # CONFIG_PACKAGE_luci-app-olsr-services is not set
 # CONFIG_PACKAGE_luci-app-olsr-viz is not set
 # CONFIG_PACKAGE_luci-app-omcproxy is not set
-# CONFIG_PACKAGE_luci-app-openclash is not set
+CONFIG_PACKAGE_luci-app-openclash=y
 # CONFIG_PACKAGE_luci-app-openlist is not set
 # CONFIG_PACKAGE_luci-app-openthread is not set
-# CONFIG_PACKAGE_luci-app-openvpn is not set
+CONFIG_PACKAGE_luci-app-openvpn=y
 # CONFIG_PACKAGE_luci-app-openvpn-server is not set
 # CONFIG_PACKAGE_luci-app-openwisp is not set
 # CONFIG_PACKAGE_luci-app-oscam is not set
 # CONFIG_PACKAGE_luci-app-p910nd is not set
 CONFIG_PACKAGE_luci-app-package-manager=y
 # CONFIG_PACKAGE_luci-app-pagekitec is not set
-# CONFIG_PACKAGE_luci-app-passwall is not set
+CONFIG_PACKAGE_luci-app-passwall=y
 
 #
 # Configuration
 #
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Haproxy is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Hysteria is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_NaiveProxy is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Client is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Server is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadow_TLS is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Simple_Obfs is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_tuic_client is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Geodata is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Geoview is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray is not set
-# CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray_Plugin is not set
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Haproxy=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Hysteria=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_NaiveProxy=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Client=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadowsocks_Rust_Server=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Shadow_TLS=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Simple_Obfs=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_SingBox=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_tuic_client is not set
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Geodata=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Geoview=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_V2ray_Plugin=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray=y
+CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Xray_Plugin=y
 # end of Configuration
 
 # CONFIG_PACKAGE_luci-app-pbr is not set
@@ -5801,7 +5801,7 @@ CONFIG_PACKAGE_luci-app-vlmcsd=y
 # CONFIG_PACKAGE_luci-app-xfrpc is not set
 # CONFIG_PACKAGE_luci-app-xinetd is not set
 # CONFIG_PACKAGE_luci-app-xlnetacc is not set
-# CONFIG_PACKAGE_luci-app-zerotier is not set
+CONFIG_PACKAGE_luci-app-zerotier=y
 # end of 3. Applications
 
 #
@@ -6932,7 +6932,7 @@ CONFIG_OPENCONNECT_GNUTLS=y
 # CONFIG_PACKAGE_softethervpn5-server is not set
 # CONFIG_PACKAGE_sstp-client is not set
 # CONFIG_PACKAGE_strongswan is not set
-# CONFIG_PACKAGE_tailscale is not set
+CONFIG_PACKAGE_tailscale=y
 # CONFIG_PACKAGE_tinc is not set
 # CONFIG_PACKAGE_tinyfecvpn is not set
 # CONFIG_PACKAGE_uanytun is not set
@@ -6945,7 +6945,7 @@ CONFIG_PACKAGE_vpnc-scripts=y
 # CONFIG_PACKAGE_wgsd-coredns is not set
 # CONFIG_PACKAGE_wireguard-tools is not set
 # CONFIG_PACKAGE_xl2tpd is not set
-# CONFIG_PACKAGE_zerotier is not set
+CONFIG_PACKAGE_zerotier
 # end of VPN
 
 #
@@ -7048,7 +7048,7 @@ CONFIG_PACKAGE_sing-box=y
 # CONFIG_PACKAGE_squid is not set
 # CONFIG_PACKAGE_srelay is not set
 # CONFIG_PACKAGE_tinyproxy is not set
-# CONFIG_PACKAGE_trojan is not set
+CONFIG_PACKAGE_trojan=y
 # CONFIG_PACKAGE_tuic-client is not set
 # CONFIG_PACKAGE_tuic-server is not set
 CONFIG_PACKAGE_uhttpd=y
