@@ -241,7 +241,7 @@ on:
       openwrt_ip:
         description: "Set OpenWrt default IP address."
         required: false
-        default: "192.168.1.1"
+        default: "172.16.200.1"
       use_ccache:
         description: "Auto use ccache."
         required: false
@@ -485,9 +485,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             ### OpenWrt Image information
-            - Default IP: `192.168.1.1`
+            - Default IP: `172.16.200.1`
             - Default username: `root`
-            - Default password: `password`
+            - Default password: `root`
             - Default WIFI name: `OpenWrt`
             - Default WIFI password: `none`
             ### Install to EMMC
