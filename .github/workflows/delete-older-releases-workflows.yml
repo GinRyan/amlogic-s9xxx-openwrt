@@ -20,7 +20,7 @@ on:
         default: true
         type: boolean
       prerelease_option:
-        description: "Whether to differentiate pre-release."
+        description: "Filter by pre-release status."
         required: false
         default: "all"
         type: choice
@@ -97,7 +97,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Initialization environment
+      - name: Initialize the environment
         id: init
         env:
           DEBIAN_FRONTEND: noninteractive

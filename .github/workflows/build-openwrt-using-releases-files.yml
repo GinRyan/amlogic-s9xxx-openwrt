@@ -16,8 +16,8 @@ on:
         type: choice
         options:
           - openwrt_main
-          - immortalwrt_master
           - lede_master
+          - immortalwrt_master
       openwrt_board:
         description: "Select device board"
         required: false
@@ -25,6 +25,11 @@ on:
         type: choice
         options:
           - all
+          - amlogic
+          - rockchip
+          - allwinner
+          - rockchip50
+          - rockchip50_100
           - first50
           - range50_100
           - range100_150
@@ -42,6 +47,11 @@ on:
           - bdkj-bd-one
           - bdy-g18-pro
           - beikeyun
+          - boca-tcn100
+          - boca-tcn200
+          - bt-100m
+          - bt-1000m
+          - cd1000
           - chainedbox
           - cm3588-nas
           - crrc
@@ -54,28 +64,39 @@ on:
           - eaidk-610
           - emb3531
           - fine3399
+          - firefly-itx-3588j
           - firefly-jd4
           - firefly-rk3399
           - fmx1-pro
           - fmx1-pro-b
+          - gea-6319
           - gzpeite-p01
           - h28k
+          - h618-devboard
           - h66k
           - h68k
           - h69k
           - h88k
           - h88k-v3
           - h96-max-m2
+          - hk1-rbox-k8s
           - hs530r
+          - ht2
           - hugsun-x99
+          - indiedroid-nova
           - ipc-r
           - jp-tvbox
           - king3399
           - kylin3399
           - lckfb-tspi
+          - lckfb-tspi-3m
           - leez
+          - lubancat-1
+          - lubancat-2
           - lx-r3s
+          - lyt-t68m
           - lz-d3568
+          - lz-d3588
           - lz-k3568
           - mrkaio-m68s
           - nanopc-t4
@@ -89,6 +110,7 @@ on:
           - orangepi-5-plus
           - orangepi-5b
           - orangepi-zero3
+          - painet-p3
           - panther-x2
           - photonicat
           - r66s
@@ -105,6 +127,7 @@ on:
           - s905d
           - s905d-ki-pro
           - s905d-sml5442tw
+          - s905d3-khadas-vim3l
           - s905l
           - s905l-aurora-1s
           - s905l-b860av21u
@@ -155,6 +178,7 @@ on:
           - s905x3-ip1001m
           - s905x3-q1
           - s905x3-q2
+          - s905x3-tox1
           - s905x3-tx3
           - s905x3-tx3-bz
           - s905x3-ugoosx3
@@ -191,6 +215,7 @@ on:
           - station-m2
           - station-p2
           - sv-33a6x
+          - sv-33a6x-vpu
           - swan1-w28
           - sw799
           - taram
@@ -200,10 +225,13 @@ on:
           - tpm312
           - tqc-a01
           - tvi3315a
+          - vontar-h618
           - vplus
           - wocyber-a3
           - wxy-oect
           - wxy-oect-mod
+          - x88pro20
+          - x98h
           - xiaobao
           - yskj
           - zcube1-max
@@ -281,7 +309,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Initialization environment
+      - name: Initialize the build environment
         id: init
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -307,7 +335,7 @@ jobs:
           timedatectl status || true
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Create simulated physical disk
+      - name: Create virtual disk for extended storage
         run: |
           mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
           root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
@@ -331,7 +359,7 @@ jobs:
         working-directory: /builder
         if: ${{ steps.init.outputs.status == 'success' && !cancelled() }}
         run: |
-          # Set up compilation source code
+          # Determine the OpenWrt source code repository
           if [[ "${{ inputs.source_branch }}" =~ ^openwrt ]]; then
               REPO_URL="https://github.com/openwrt/openwrt"
           elif [[ "${{ inputs.source_branch }}" =~ ^lede ]]; then
@@ -339,7 +367,7 @@ jobs:
           elif [[ "${{ inputs.source_branch }}" =~ ^immortalwrt ]]; then
               REPO_URL="https://github.com/immortalwrt/immortalwrt"
           else
-              echo "Unknown source code repository."
+              echo "Error: Unknown source code repository."
               exit 1
           fi
           source_branch_input="${{ inputs.source_branch }}"
@@ -351,7 +379,7 @@ jobs:
           ln -sf /builder/openwrt ${{ github.workspace }}/openwrt
           ln -sf /builder/openwrt /home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt
 
-          # Get name (file name) and url (API asset URL)
+          # Query the latest release asset via GitHub API
           latest_version=$(curl -s \
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -366,22 +394,22 @@ jobs:
               {data: .updated_at, url: .url, name: .name}')
 
           [[ -z "${latest_version}" || "${latest_version}" == "null" ]] && {
-              echo "Invalid OpenWrt rootfs download address."
+              echo "Error: Failed to resolve OpenWrt rootfs download URL."
               exit 1
           }
 
-          # Get URL and filename separately
+          # Extract download URL and filename
           latest_url="$(echo ${latest_version} | jq -r '.url')"
           openwrt_filename="$(echo ${latest_version} | jq -r '.name')"
 
-          # Download using API method (add octet-stream header)
+          # Download asset via GitHub API (binary stream)
           echo "Downloading: ${openwrt_filename}"
           curl -fsSL \
                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                -H "Accept: application/octet-stream" \
                "${latest_url}" \
                -o "${armsr_tarfile_path}/${openwrt_filename}"
-          [[ "${?}" -ne "0" ]] && echo "Download failed." && exit 1
+          [[ "${?}" -ne "0" ]] && echo "Error: Download failed." && exit 1
 
           echo "build_tag=OpenWrt_${{ inputs.source_branch }}_${{ inputs.openwrt_storage }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
           df -hT ${PWD}
@@ -390,7 +418,7 @@ jobs:
           echo "REPO_BRANCH=${REPO_BRANCH}" >> ${GITHUB_ENV}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Packaging OpenWrt
+      - name: Package OpenWrt for target boards
         if: ${{ steps.down.outputs.status == 'success' && !cancelled() }}
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
@@ -403,7 +431,7 @@ jobs:
           kernel_usage: ${{ inputs.kernel_usage }}
           builder_name: ${{ inputs.builder_name }}
 
-      - name: Upload the packaged OpenWrt
+      - name: Upload packaged OpenWrt to Release
         uses: ncipollo/release-action@main
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
@@ -415,7 +443,7 @@ jobs:
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
-            ### OpenWrt Image information
+            ### OpenWrt Image Information
             - Default IP: `192.168.1.1`
             - Default username: `root`
             - Default password: `password`
@@ -425,6 +453,6 @@ jobs:
             - Login to OpenWrt → `System` → `Amlogic Service` → `Install OpenWrt`
             ### OpenWrt source code
             - [${{ env.REPO_NAME }}](${{ env.REPO_URL }}/tree/${{ env.REPO_BRANCH }})
-            ### Applicable platform
+            ### Applicable Platform
             - 🐧 `arm64`
             - 🐋 Docker image: https://hub.docker.com/u/ophub

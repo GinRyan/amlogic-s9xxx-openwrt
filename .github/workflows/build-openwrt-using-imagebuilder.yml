@@ -15,13 +15,15 @@ on:
       releases_branch:
         description: "Select the releases branch"
         required: false
-        default: "openwrt:24.10.5"
+        default: "openwrt:25.12.3"
         type: choice
         options:
-          - openwrt:24.10.5
-          - openwrt:24.10.4
+          - openwrt:25.12.3
+          - openwrt:25.12.2
+          - openwrt:25.12.1
+          - immortalwrt:24.10.6
+          - immortalwrt:24.10.5
           - immortalwrt:24.10.4
-          - immortalwrt:24.10.3
       openwrt_board:
         description: "Select device board"
         required: false
@@ -29,6 +31,11 @@ on:
         type: choice
         options:
           - all
+          - amlogic
+          - rockchip
+          - allwinner
+          - rockchip50
+          - rockchip50_100
           - first50
           - range50_100
           - range100_150
@@ -46,6 +53,11 @@ on:
           - bdkj-bd-one
           - bdy-g18-pro
           - beikeyun
+          - boca-tcn100
+          - boca-tcn200
+          - bt-100m
+          - bt-1000m
+          - cd1000
           - chainedbox
           - cm3588-nas
           - crrc
@@ -58,28 +70,39 @@ on:
           - eaidk-610
           - emb3531
           - fine3399
+          - firefly-itx-3588j
           - firefly-jd4
           - firefly-rk3399
           - fmx1-pro
           - fmx1-pro-b
+          - gea-6319
           - gzpeite-p01
           - h28k
+          - h618-devboard
           - h66k
           - h68k
           - h69k
           - h88k
           - h88k-v3
           - h96-max-m2
+          - hk1-rbox-k8s
           - hs530r
+          - ht2
           - hugsun-x99
+          - indiedroid-nova
           - ipc-r
           - jp-tvbox
           - king3399
           - kylin3399
           - lckfb-tspi
+          - lckfb-tspi-3m
           - leez
+          - lubancat-1
+          - lubancat-2
           - lx-r3s
+          - lyt-t68m
           - lz-d3568
+          - lz-d3588
           - lz-k3568
           - mrkaio-m68s
           - nanopc-t4
@@ -93,6 +116,7 @@ on:
           - orangepi-5-plus
           - orangepi-5b
           - orangepi-zero3
+          - painet-p3
           - panther-x2
           - photonicat
           - r66s
@@ -109,6 +133,7 @@ on:
           - s905d
           - s905d-ki-pro
           - s905d-sml5442tw
+          - s905d3-khadas-vim3l
           - s905l
           - s905l-aurora-1s
           - s905l-b860av21u
@@ -159,6 +184,7 @@ on:
           - s905x3-ip1001m
           - s905x3-q1
           - s905x3-q2
+          - s905x3-tox1
           - s905x3-tx3
           - s905x3-tx3-bz
           - s905x3-ugoosx3
@@ -195,6 +221,7 @@ on:
           - station-m2
           - station-p2
           - sv-33a6x
+          - sv-33a6x-vpu
           - swan1-w28
           - sw799
           - taram
@@ -204,10 +231,13 @@ on:
           - tpm312
           - tqc-a01
           - tvi3315a
+          - vontar-h618
           - vplus
           - wocyber-a3
           - wxy-oect
           - wxy-oect-mod
+          - x88pro20
+          - x98h
           - xiaobao
           - yskj
           - zcube1-max
@@ -278,7 +308,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Initialization environment
+      - name: Initialize the build environment
         id: init
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -304,7 +334,7 @@ jobs:
           timedatectl status || true
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Create simulated physical disk
+      - name: Create virtual disk for extended storage
         run: |
           mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
           root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
@@ -323,7 +353,7 @@ jobs:
           df -Th
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Build OpenWrt Rootfs [ ${{ inputs.releases_branch }} ]
+      - name: Build OpenWrt rootfs [ ${{ inputs.releases_branch }} ]
         id: imagebuilder
         if: ${{ steps.init.outputs.status == 'success' && !cancelled() }}
         run: |
@@ -331,13 +361,13 @@ jobs:
           chmod +x ${IMAGEBUILDER_SH}
           ${IMAGEBUILDER_SH} ${RELEASES_BRANCH}
           echo "build_tag=OpenWrt_imagebuilder_${RELEASES_BRANCH/:/_}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
-          # Add symbolic link
+          # Create symbolic link for packaging
           [[ -d "/builder/openwrt" ]] || mkdir -p /builder/openwrt
           ln -sf /builder/openwrt /home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt
           df -hT ${PWD}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Upload OpenWrt to Release
+      - name: Upload OpenWrt rootfs to Release
         uses: ncipollo/release-action@main
         if: ${{ steps.imagebuilder.outputs.status == 'success' && !cancelled() }}
         with:
@@ -349,7 +379,7 @@ jobs:
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Packaging OpenWrt
+      - name: Package OpenWrt for target boards
         if: ${{ steps.imagebuilder.outputs.status == 'success' && !cancelled() }}
         uses: ophub/amlogic-s9xxx-openwrt@main
         with:
@@ -362,7 +392,7 @@ jobs:
           kernel_usage: ${{ inputs.kernel_usage }}
           builder_name: ${{ inputs.builder_name }}
 
-      - name: Upload the packaged OpenWrt
+      - name: Upload packaged OpenWrt to Release
         uses: ncipollo/release-action@main
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
@@ -374,7 +404,7 @@ jobs:
           makeLatest: true
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
-            ### OpenWrt Image information
+            ### OpenWrt Image Information
             - Default IP: `192.168.1.1`
             - Default username: `root`
             - Default password: `password`
@@ -382,6 +412,6 @@ jobs:
             - Default WIFI password: `none`
             ### Install to EMMC
             - Login to OpenWrt → `System` → `Amlogic Service` → `Install OpenWrt`
-            ### Applicable platform
+            ### Applicable Platform
             - 🐧 `arm64`
             - 🐋 Docker image: https://hub.docker.com/u/ophub
