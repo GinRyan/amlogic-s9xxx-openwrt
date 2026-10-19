@@ -12,9 +12,10 @@ on:
       source_branch:
         description: "Select the source branch"
         required: false
-        default: "openwrt_main"
+        default: "all"
         type: choice
         options:
+          - all
           - openwrt_main
           - lede_master
           - immortalwrt_master
@@ -25,17 +26,18 @@ on:
         type: choice
         options:
           - all
+          - allwinner
           - amlogic
           - rockchip
-          - allwinner
           - rockchip50
           - rockchip50_100
+          - rockchip100_150
           - first50
           - range50_100
           - range100_150
-          - last20
+          - last50
           - a311d-oes_s922x-oes-plus_wxy-oect
-          - nsy-g16-plus_nsy-g68-plus_bdy-g18-pro
+          - nsy-g16-plus_nsy-g68-plus_bdy-g18-pro_bdy-g98
           - s905d_s905x3_s912_s922x-ct2000
           - a311d
           - a311d-oes
@@ -46,6 +48,7 @@ on:
           - aio-3399c-ai
           - bdkj-bd-one
           - bdy-g18-pro
+          - bdy-g98
           - beikeyun
           - boca-tcn100
           - boca-tcn200
@@ -57,11 +60,15 @@ on:
           - crrc
           - dc-a588
           - dg3399
+          - dg-nas-lite
           - dg-tn3568
           - dlfr100
           - e20c
           - e25
           - eaidk-610
+          - easepi-a2
+          - easepi-r2
+          - elfboard-elf2
           - emb3531
           - fine3399
           - firefly-itx-3588j
@@ -72,6 +79,8 @@ on:
           - gea-6319
           - gzpeite-p01
           - h28k
+          - h339pc
+          - h618-ai-douhe
           - h618-devboard
           - h66k
           - h68k
@@ -80,12 +89,14 @@ on:
           - h88k-v3
           - h96-max-m2
           - hk1-rbox-k8s
+          - houzzkit-f1
           - hs530r
           - ht2
           - hugsun-x99
           - indiedroid-nova
           - ipc-r
           - jp-tvbox
+          - kickpi-k11c-v12
           - king3399
           - kylin3399
           - lckfb-tspi
@@ -93,31 +104,45 @@ on:
           - leez
           - lubancat-1
           - lubancat-2
+          - lubancat-3
+          - lubancat-4
+          - lubancat-5
           - lx-r3s
           - lyt-t68m
           - lz-d3568
           - lz-d3588
           - lz-k3568
+          - md1000
           - mrkaio-m68s
+          - mytv-net1
           - nanopc-t4
           - nanopc-t6
           - nanopi-m5
           - nanopi-r5c
           - nanopi-r5s
+          - nanopi-som
           - nsy-g16-plus
           - nsy-g68-plus
           - orangepi-3b
           - orangepi-5-plus
+          - orangepi-5-pro
+          - orangepi-5-ultra
           - orangepi-5b
           - orangepi-zero3
           - painet-p3
+          - painet-p5
           - panther-x2
           - photonicat
+          - quarkpi-ca2
           - r66s
           - r68s
+          - recomputer-rk3576-devkit
           - renegade-rk3328
           - rk3318-box
+          - roceos-k40pro
           - rock-5-itx
+          - rock-3b
+          - rock-3c
           - rock5b
           - rock5c
           - ruisen-box
@@ -142,11 +167,13 @@ on:
           - s905l3a
           - s905l3a-cm311
           - s905l3a-m401a
+          - s905l3a-w103d
           - s905l3b
           - s905l3b-e900v21d
           - s905l3b-e900v22d
           - s905l3b-e900v22e
           - s905l3b-ip103h
+          - s905l3b-m302a
           - s905l3b-rg020et-ca
           - s905l3b-unt403a
           - s905lb-ipbs9505
@@ -164,6 +191,7 @@ on:
           - s905x-tbee
           - s905x-tx9
           - s905x2
+          - s905x2-b860h-v5
           - s905x2-km3
           - s905x2-x96max-2g
           - s905x2-hg680fj
@@ -209,6 +237,7 @@ on:
           - s922x-reva
           - s922x-ugoos-am6
           - seewo-sv21
+          - seewo-sv50
           - smart-am40
           - smart-am60
           - station-m1
@@ -218,6 +247,7 @@ on:
           - sv-33a6x-vpu
           - swan1-w28
           - sw799
+          - sz3390
           - taram
           - tanix-tx6
           - tb-ls3399
@@ -230,12 +260,19 @@ on:
           - wocyber-a3
           - wxy-oect
           - wxy-oect-mod
+          - x88pro13
           - x88pro20
           - x98h
+          - x98h-100mb
           - xiaobao
+          - xingyicloud
+          - youyeetoo-r1-v3
+          - youyeetoo-yy3568
+          - youyeetoo-yy3588
           - yskj
           - zcube1-max
           - zk-r39a
+          - ztl-a568
           - zysj
       openwrt_kernel:
         description: "Select kernel version"
@@ -301,9 +338,33 @@ env:
   TZ: Etc/UTC
 
 jobs:
+  setup:
+    runs-on: ubuntu-26.04-arm
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set build matrix based on source_branch input
+        id: set-matrix
+        run: |
+          if [[ "${{ inputs.source_branch }}" == "all" ]]; then
+            MATRIX='{"include":[{"branch":"openwrt_main"},{"branch":"lede_master"},{"branch":"immortalwrt_master"}]}'
+          else
+            MATRIX='{"include":[{"branch":"${{ inputs.source_branch }}"}]}'
+          fi
+          echo "matrix=${MATRIX}" >> "${GITHUB_OUTPUT}"
+
   build:
-    runs-on: ubuntu-24.04
+    needs: setup
+    runs-on: ubuntu-26.04-arm
     if: ${{ github.event.repository.owner.id == github.event.sender.id }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+
+    name: build-${{ matrix.branch }}
 
     steps:
       - name: Checkout
@@ -319,58 +380,58 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
           sudo swapoff -a
           sudo rm -f /swapfile /mnt/swapfile
-          sudo -E apt-get -y update
-          sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-          sudo -E apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2404-make-openwrt-depends)
-          sudo -E systemctl daemon-reload
-          #sudo -E apt-get -y full-upgrade
-          sudo -E apt-get -y autoremove --purge
-          sudo -E apt-get clean
+          sudo apt-get -y update
+          sudo apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+          sudo apt-get -y install $(curl -fsSL https://ophub.org/ubuntu2604-make-openwrt-depends)
+          sudo systemctl daemon-reload
+          #sudo apt-get -y full-upgrade
+          sudo apt-get -y autoremove --purge
+          sudo apt-get clean
           sudo sed -i '/NVM_DIR/d;/skel/d' /root/{.bashrc,.profile}
           sudo rm -rf ~/{.cargo,.dotnet,.rustup}
-          sudo -E timedatectl set-timezone "${TZ:-Etc/UTC}"
-          sudo -E ntpdate ntp.ubuntu.com 0.pool.ntp.org || true
-          sudo -E timedatectl set-ntp true
+          sudo timedatectl set-timezone "${TZ:-Etc/UTC}"
+          sudo ntpdate ntp.ubuntu.com 0.pool.ntp.org || true
+          sudo timedatectl set-ntp true
           date -u
           timedatectl status || true
           echo "status=success" >> ${GITHUB_OUTPUT}
 
       - name: Create virtual disk for extended storage
+        id: disk
         run: |
-          mnt_size=$(expr $(df -h /mnt | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 1)
-          root_size=$(expr $(df -h / | tail -1 | awk '{print $4}' | sed 's/[[:alpha:]]//g' | sed 's/\..*//') - 4)
-          sudo truncate -s "${mnt_size}"G /mnt/mnt.img
+          # Get available space in exact GB
+          root_avail=$(df --block-size=1G / | tail -1 | awk '{print $4}')
+          root_size=$(( root_avail - 4 ))
+          [[ "${root_size}" -gt 0 ]] || { echo "Error: Insufficient space on /: ${root_avail}G available"; exit 1; }
+
           sudo truncate -s "${root_size}"G /root.img
-          sudo losetup /dev/loop6 /mnt/mnt.img
-          sudo losetup /dev/loop7 /root.img
-          sudo pvcreate /dev/loop6
-          sudo pvcreate /dev/loop7
-          sudo vgcreate github /dev/loop6 /dev/loop7
-          sudo lvcreate -n runner -l 100%FREE github
-          sudo mkfs.xfs -f -i sparse=0 -b size=4096 /dev/github/runner
+          build_dev=$(sudo losetup --find --show /root.img)
+          echo "Using /: ${root_size}G"
+
+          sudo mkfs.xfs -f -i sparse=0 -b size=4096 "${build_dev}"
           sudo mkdir -p /builder
-          sudo mount /dev/github/runner /builder
+          sudo mount "${build_dev}" /builder
           sudo chown -R runner:runner /builder
           df -Th
           echo "status=success" >> ${GITHUB_OUTPUT}
 
-      - name: Download OpenWrt [ ${{ inputs.source_branch }} ]
+      - name: Download OpenWrt [ ${{ matrix.branch }} ]
         id: down
         working-directory: /builder
         if: ${{ steps.init.outputs.status == 'success' && !cancelled() }}
         run: |
           # Determine the OpenWrt source code repository
-          if [[ "${{ inputs.source_branch }}" =~ ^openwrt ]]; then
+          if [[ "${{ matrix.branch }}" =~ ^openwrt ]]; then
               REPO_URL="https://github.com/openwrt/openwrt"
-          elif [[ "${{ inputs.source_branch }}" =~ ^lede ]]; then
+          elif [[ "${{ matrix.branch }}" =~ ^lede ]]; then
               REPO_URL="https://github.com/coolsnowwolf/lede"
-          elif [[ "${{ inputs.source_branch }}" =~ ^immortalwrt ]]; then
+          elif [[ "${{ matrix.branch }}" =~ ^immortalwrt ]]; then
               REPO_URL="https://github.com/immortalwrt/immortalwrt"
           else
               echo "Error: Unknown source code repository."
               exit 1
           fi
-          source_branch_input="${{ inputs.source_branch }}"
+          source_branch_input="${{ matrix.branch }}"
           REPO_NAME="${source_branch_input%_*}"
           REPO_BRANCH="${source_branch_input##*_}"
 
@@ -384,7 +445,7 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               https://api.github.com/repos/${{ github.repository }}/releases?per_page=20 | \
-              jq -r --arg RTK "OpenWrt_${{ inputs.source_branch }}_" \
+              jq -r --arg RTK "OpenWrt_${{ matrix.branch }}_" \
               --arg BOARD "-rootfs.tar.gz" \
               '[.[] | select(.tag_name | contains($RTK))] |
               map(.assets[] | select(.name | endswith($BOARD))) |
@@ -411,7 +472,7 @@ jobs:
                -o "${armsr_tarfile_path}/${openwrt_filename}"
           [[ "${?}" -ne "0" ]] && echo "Error: Download failed." && exit 1
 
-          echo "build_tag=OpenWrt_${{ inputs.source_branch }}_${{ inputs.openwrt_storage }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
+          echo "build_tag=OpenWrt_${{ matrix.branch }}_${{ inputs.openwrt_storage }}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
           df -hT ${PWD}
           echo "REPO_URL=${REPO_URL}" >> ${GITHUB_ENV}
           echo "REPO_NAME=${REPO_NAME}" >> ${GITHUB_ENV}
@@ -432,16 +493,16 @@ jobs:
           builder_name: ${{ inputs.builder_name }}
 
       - name: Upload packaged OpenWrt to Release
-        uses: ncipollo/release-action@main
+        uses: ophub/upload-to-releases@main
         if: ${{ env.PACKAGED_STATUS == 'success' && !cancelled() }}
         with:
           tag: ${{ env.build_tag }}
           artifacts: ${{ env.PACKAGED_OUTPUTPATH }}/*
-          allowUpdates: true
-          removeArtifacts: false
-          replacesArtifacts: true
-          makeLatest: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          allow_updates: true
+          remove_artifacts: false
+          replaces_artifacts: true
+          make_latest: true
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
           body: |
             ### OpenWrt Image Information
             - Default IP: `192.168.1.1`

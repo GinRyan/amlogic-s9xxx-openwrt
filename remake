@@ -93,9 +93,8 @@ kernel_usage=""
 stable_kernel=("6.12.y" "6.18.y")
 flippy_kernel=(${stable_kernel[@]})
 beta_kernel=(${stable_kernel[@]})
-rk3588_kernel=("6.1.y")
-rk35xx_kernel=("6.1.y")
-h6_kernel=("6.6.y")
+rk3588_kernel=("6.1.y" "6.12.y")
+rk35xx_kernel=("6.1.y" "6.12.y")
 specific_6xy=("6.1.y" "6.6.y" "6.12.y" "6.18.y")
 specific_5xy=("5.10.y" "5.15.y")
 # Set to automatically use the latest kernel
@@ -103,12 +102,13 @@ auto_kernel="true"
 # Initialize the kernel tags array
 declare -A tags_list
 
-# Set the Amlogic u-boot series (u-boot-xxx.bin)
-uboot_meson_gxl=("p201.bin" "p212.bin" "s905x-s912.bin" "n1.bin" "r3300l.bin")
+# Amlogic u-boot files: https://github.com/ophub/u-boot/tree/main/u-boot/amlogic/overload
+# Array entries omit the "u-boot-" prefix of the file name (e.g. p201.bin = u-boot-p201.bin)
+uboot_meson_gxl=("p201.bin" "p212.bin" "s905x-s912.bin" "n1.bin" "r3300l.bin" "s905x-s905lb.bin")
 uboot_meson_gxm=("p212.bin" "s905x-s912.bin" "zyxq.bin")
-uboot_meson_g12a=("x96max.bin" "e900v22c.bin")
-uboot_meson_g12b=("gtking.bin" "gtkingpro.bin" "gtkingpro-rev-a.bin" "s905x2-s922.bin")
-uboot_meson_sm1=("x96maxplus.bin" "ugoos-x3.bin" "tx3-qz.bin" "tx3-bz.bin" "skyworth-lb2004.bin")
+uboot_meson_g12a=("x96max.bin" "e900v22c.bin" "w103d.bin" "sei510.bin" "u200.bin")
+uboot_meson_g12b=("gtking.bin" "gtkingpro.bin" "gtkingpro-rev-a.bin" "s905x2-s922.bin" "odroid-n2.bin")
+uboot_meson_sm1=("x96maxplus.bin" "ugoos-x3.bin" "tx3-qz.bin" "tx3-bz.bin" "skyworth-lb2004.bin" "s905x3.bin" "sei610.bin")
 uboot_meson_gxbb=("p201.bin" "s905.bin")
 
 # Set OpenWrt default IP address
@@ -532,17 +532,18 @@ download_depends() {
     # Remove Armbian-specific files from the [ sbin ] directory
     find "${git_tmp_path}" -type d -path "*/platform-files/*/rootfs/usr/sbin" -prune -exec rm -rf {} +
     # Move the platform files to the storage directory
-    cp -af --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/platform-files/." "${platform_files}" ||
+    cp -af --update=none --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/platform-files/." "${platform_files}" ||
         error_msg "OpenWrt: platform-files download failed."
     echo -e "${INFO} OpenWrt: platform-files download completed."
     # Move the different files to the storage directory
-    cp -af --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/different-files/." "${different_files}" ||
+    cp -af --update=none --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/different-files/." "${different_files}" ||
         error_msg "OpenWrt: different-files download failed."
     echo -e "${INFO} OpenWrt: different-files download completed."
     # Move the balethirq files to the storage directory
-    cp -f --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/common-files/usr/sbin/balethirq.pl" "${common_files}/usr/sbin" &&
-        cp -f --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/common-files/etc/balance_irq" "${common_files}/etc" ||
-        error_msg "OpenWrt: balethirq download failed."
+    cp -f --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/common-files/usr/sbin/balethirq.pl" "${common_files}/usr/sbin" ||
+        error_msg "OpenWrt: balethirq.pl download failed."
+    cp -f --no-preserve=ownership "${git_tmp_path}/build-armbian/armbian-files/common-files/etc/balance_irq" "${common_files}/etc" ||
+        error_msg "OpenWrt: balance_irq download failed."
     echo -e "${INFO} OpenWrt: balethirq download completed."
     # Delete temporary files
     rm -rf "${git_tmp_path}"
@@ -551,16 +552,16 @@ download_depends() {
     git_tmp_path="$(mktemp -d)"
     git_pull_dir "${script_repo}" main "${git_tmp_path}"
     # Move the sbin files to the storage directory
-    cp -af --no-preserve=ownership "${git_tmp_path}/luci-app-amlogic/root/usr/sbin/." "${common_files}/usr/sbin" ||
+    cp -af --update=none --no-preserve=ownership "${git_tmp_path}/luci-app-amlogic/root/usr/sbin/." "${common_files}/usr/sbin" ||
         error_msg "luci-app-amlogic: sbin download failed."
     echo -e "${INFO} luci-app-amlogic: sbin download completed."
-    chmod +x "${common_files}/usr/sbin"/*
+    find "${common_files}/usr/sbin/" -name "openwrt-*" -exec chmod +x {} + 2>/dev/null
     # Move the share files to the storage directory
     mkdir -p "${common_files}/usr/share/amlogic"
-    cp -af --no-preserve=ownership "${git_tmp_path}/luci-app-amlogic/root/usr/share/amlogic/." "${common_files}/usr/share/amlogic" ||
+    cp -af --update=none --no-preserve=ownership "${git_tmp_path}/luci-app-amlogic/root/usr/share/amlogic/." "${common_files}/usr/share/amlogic" ||
         error_msg "luci-app-amlogic: share download failed."
     echo -e "${INFO} luci-app-amlogic: share download completed."
-    chmod +x "${common_files}/usr/share/amlogic"/*
+    find "${common_files}/usr/share/amlogic/" -type f -exec chmod +x {} + 2>/dev/null
     # Delete temporary files
     rm -rf "${git_tmp_path}"
 }
@@ -1024,6 +1025,18 @@ refactor_bootfs() {
         [[ "${BOOT_CONF}" == "extlinux.conf" ]] && mv -f "${boot_extlinux_file}" "${rename_extlinux_file}"
     }
 
+    # Board-specific (ALIENTEK-QuarkPi-CA2 / RK3588S): the stock on-board Rockchip U-Boot shipped with
+    # this board only scans <devname>_extlinux/extlinux.conf on the boot partitions.
+    if [[ "${board}" == "quarkpi-ca2" && -f "${rename_extlinux_file}" ]]; then
+        for _d in mmc0_extlinux mmc1_extlinux; do
+            mkdir -p "${_d}"
+            sed -e "s|/Image|/vmlinuz-${kernel_name}|g" \
+                -e "s|/uInitrd|/uInitrd-${kernel_name}|g" \
+                -e "s|console=ttyS2,1500000|console=ttyFIQ0,1500000|g" \
+                "${rename_extlinux_file}" >"${_d}/extlinux.conf"
+        done
+    fi
+
     # Edit the armbianEnv.txt
     armbianenv_conf_file="armbianEnv.txt"
     [[ -f "${armbianenv_conf_file}" ]] && {
@@ -1110,6 +1123,8 @@ refactor_rootfs() {
     echo "8189fs" >etc/modules.d/8189fs
     # Realtek RTL8188FU Wireless LAN Driver
     echo "rtl8188fu" >etc/modules.d/rtl8188fu
+    # Realtek RTL8822BS Wireless LAN Driver
+    echo "rtw88_8822bs" >etc/modules.d/rtw88_8822bs
     # Realtek RTL8822CS Wireless LAN Driver
     echo "rtw88_8822cs" >etc/modules.d/rtw88_8822cs
     # USB Ralink Wireless LAN Driver
@@ -1124,6 +1139,7 @@ refactor_rootfs() {
     echo "mt76x2e" >etc/modules.d/mt76x2e
     echo "mt7921e" >etc/modules.d/mt7921e
     echo "mt7915e" >etc/modules.d/mt7915e
+    echo "ssv6051" >etc/modules.d/ssv6051
 
     # GPU Driver
     echo "panfrost" >etc/modules.d/panfrost
@@ -1169,7 +1185,7 @@ EOF
     }
     [[ -f "etc/inittab" ]] && {
         sed -i 's/ttyAMA0/ttyAML0/' etc/inittab
-        sed -i 's/ttyS0/tty0/' etc/inittab
+        [[ "${board}" != "xingyicloud" ]] && sed -i 's/ttyS0/tty0/' etc/inittab
     }
 
     # Automatic expansion of the third and fourth partitions on first boot
@@ -1216,6 +1232,14 @@ EOF
         sed -e "s/macaddr=.*/macaddr=${random_macaddr}:06/" "brcmfmac43430-sdio.txt" >"brcmfmac43430-sdio.panther,x2.txt"
         # ct2000 s922x is brm4359
         sed -i "s/macaddr=.*/macaddr=${random_macaddr}:07/" "brcmfmac4359-sdio.ali,ct2000.txt"
+        # easepi-r2 is AP6256 (BCM43455) wifi/bluetooth
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:08/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.linkease,easepi-r2.txt"
+        ln -sf brcmfmac43455-sdio.bin brcmfmac43455-sdio.linkease,easepi-r2.bin
+        ln -sf brcmfmac43455-sdio.clm_blob brcmfmac43455-sdio.linkease,easepi-r2.clm_blob
+        # easepi-a2 is AP6255 (BCM43455) wifi/bluetooth
+        sed -e "s/macaddr=.*/macaddr=${random_macaddr}:09/" "brcmfmac43455-sdio.txt" >"brcmfmac43455-sdio.easepi,a2.txt"
+        ln -sf brcmfmac43455-sdio.bin brcmfmac43455-sdio.easepi,a2.bin
+        ln -sf brcmfmac43455-sdio.clm_blob brcmfmac43455-sdio.easepi,a2.clm_blob
     )
 
     # Add firmware version information to the terminal banner
