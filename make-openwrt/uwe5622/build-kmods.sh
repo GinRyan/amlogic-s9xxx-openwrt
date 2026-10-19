@@ -113,17 +113,20 @@ driver_path="${script_path}/driver"
 # ---------------------------------------------------------------------------------------
 # 1. Download the ophub kernel package and read the release name from its members
 # ---------------------------------------------------------------------------------------
+# Downloads are cached separately from the build tree so that a second run (or a
+# different kernel of the same version) does not fetch ~290 MB again.
+cache_path="${UWE5622_CACHE:-${TMPDIR:-/tmp}/uwe5622-cache}"
 work_path="${TMPDIR:-/tmp}/uwe5622-build-${kernel_version}-${kernel_tag}"
-mkdir -p "${work_path}"
+mkdir -p "${cache_path}" "${work_path}"
 
 # The kernel package (<version>.tar.gz) bundles boot/, modules/, dtb/ and
 # header-<release>.tar.gz; the release name is only visible from the inside.
-package_file="${work_path}/kernel-${kernel_version}.tar.gz"
+package_file="${cache_path}/kernel-${kernel_version}.tar.gz"
 if [[ ! -s "${package_file}" ]]; then
     package_url="https://github.com/${kernel_repo}/releases/download/kernel_${kernel_tag}/${kernel_version}.tar.gz"
     info "Downloading the kernel package [ ${package_url} ] (~140 MB)"
     curl -fL --retry 3 --retry-delay 5 -o "${package_file}" "${package_url}" ||
-        die "Kernel package download failed for [ ${kernel_version} ] in tag [ kernel_${kernel_tag} ]."
+        { rm -f "${package_file}"; die "Kernel package download failed for [ ${kernel_version} ] in tag [ kernel_${kernel_tag} ]."; }
 fi
 
 package_members="$(tar -tzf "${package_file}")" || die "Cannot read [ ${package_file} ]."
@@ -177,9 +180,10 @@ if [[ -n "${source_dir}" ]]; then
 else
     kernel_src="${work_path}/linux"
     if [[ ! -f "${kernel_src}/Makefile" ]]; then
-        src_file="${work_path}/linux-${kernel_version}.tar.xz"
+        src_file="${cache_path}/linux-${kernel_version}.tar.xz"
         if [[ ! -s "${src_file}" ]]; then
-            kernel_series="v$(echo "${kernel_version}" | awk -F. '{print $1"."$2}').x"
+            # kernel.org keeps every 6.x release under v6.x/ (not v6.12.x/)
+            kernel_series="v$(echo "${kernel_version}" | cut -d. -f1).x"
             for mirror in "https://cdn.kernel.org/pub/linux/kernel" "https://mirrors.edge.kernel.org/pub/linux/kernel"; do
                 src_url="${mirror}/${kernel_series}/linux-${kernel_version}.tar.xz"
                 info "Downloading [ ${src_url} ]"
@@ -313,6 +317,9 @@ for ko in \
     info "Built [ $(basename "${ko}") ] ($(stat -c%s "${dest_path}/$(basename "${ko}")") bytes)"
 done
 
+# Write through a temporary file: the destination may be an existing file the
+# current user cannot open for writing (e.g. a bind mount with foreign ownership).
+info_tmp="${dest_path}/.build-info.txt.tmp"
 {
     echo "kernel_release=${kernel_release}"
     echo "kernel_tag=kernel_${kernel_tag}"
@@ -323,7 +330,8 @@ done
     for name in "${built_modules[@]}"; do
         echo "${name}: $(strings "${dest_path}/${name}" | grep -m 1 '^vermagic=')"
     done
-} >"${dest_path}/build-info.txt"
+} >"${info_tmp}" && mv -f "${info_tmp}" "${dest_path}/build-info.txt" ||
+    die "Cannot write [ ${dest_path}/build-info.txt ]."
 
 info "Modules are in [ ${dest_path} ]:"
 ls -l "${dest_path}"

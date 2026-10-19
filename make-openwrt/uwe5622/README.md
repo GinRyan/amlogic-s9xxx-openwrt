@@ -48,9 +48,13 @@ make-openwrt/
 ├── uwe5622/
 │   ├── README.md                 ← 本文件
 │   ├── build-kmods.sh            ← 为指定 ophub 内核版本编译模块
+│   ├── docker/                   ← 固定构建环境（Dockerfile + 包装脚本）
+│   │   ├── Dockerfile
+│   │   └── build-in-docker.sh
 │   ├── driver/                   ← Armbian 驱动源码（上游 commit 见 driver/UPSTREAM）
 │   ├── dts/
-│   │   └── orangepi-3b-uwe5622-overlay.dts    ← 板级设备树 overlay
+│   │   ├── orangepi-3b-uwe5622-overlay.dts        ← 给预编译 dtb 用的 overlay
+│   │   └── board-orangepi3b-add-uwe5622-wifi-bt-nodes.patch ← 自编内核时用
 │   └── kmods/<kernel release>/   ← 编译产物（3 个 .ko + build-info.txt）
 └── openwrt-files/different-files/orangepi-3b/rootfs/etc/
     ├── openwrt-board-release.conf   ← 板级打包钩子（打 dtb + 装模块）
@@ -112,13 +116,39 @@ sudo apt-get install -y build-essential gcc-aarch64-linux-gnu \
 
 > **工具链**：ophub 用 GCC 15 编译内核。Ubuntu 24.04 自带 GCC 13 不支持内核使用的
 > `-fmin-function-alignment=4`，脚本会自动检测并退回 `CONFIG_FUNCTION_ALIGNMENT=0`
-> （只影响函数对齐，不影响 ABI）。要与内核完全一致可用 Ubuntu 26.04 容器：
-> ```bash
-> docker run --rm -v "$PWD:/w" -w /w ubuntu:26.04 bash -c "
->   apt-get update -qq && apt-get install -y -qq build-essential gcc-aarch64-linux-gnu \
->     bc bison flex libssl-dev libelf-dev xz-utils python3 curl && \
->   ./make-openwrt/uwe5622/build-kmods.sh -v 6.12.69"
-> ```
+> （只影响函数对齐，不影响 ABI）。
+
+### 3.1.1 用固定镜像编译（推荐）
+
+```bash
+# 构建/复用固定镜像 uwe5622-builder:26.04，并在容器里执行 build-kmods.sh
+./make-openwrt/uwe5622/docker/build-in-docker.sh -v 6.12.69 -t rk35xx
+```
+
+镜像定义在 [docker/Dockerfile](./docker/Dockerfile)：
+
+- 基础镜像 `ubuntu:26.04` **按 digest 固定**（`@sha256:c098726d...`），上游 tag
+  重新推送也不会改变构建环境；要升级时显式改 digest（见 Dockerfile 顶部注释）；
+- 预装 GCC 15 交叉工具链（`gcc-aarch64-linux-gnu`，与编内核的 15.3.1 同代）和 kbuild
+  依赖（bc/bison/flex/libssl-dev/libelf-dev/xz/python3），以及 `dtc`/`kmod`（打 dtb、depmod 时用得上）；
+- 镜像内 `/opt/uwe5622-toolchain.txt` 记录了实际装上的包版本，随时可以查：
+  ```bash
+  docker run --rm uwe5622-builder:26.04 cat /opt/uwe5622-toolchain.txt
+  ```
+- 内核包与内核源码的下载缓存放在 docker volume `uwe5622-build-cache`（挂载到 `/cache`），
+  同一版本第二次构建无需重下 ~290 MB；不用容器时缓存默认在 `${TMPDIR:-/tmp}/uwe5622-cache`，
+  可用 `UWE5622_CACHE` 改位置；
+- 容器以当前 uid/gid 运行（`--user`），写回仓库的 `.ko` 不会变成 root 所有。
+
+可调环境变量：`UWE5622_DOCKER_IMAGE`、`UWE5622_DOCKER_CACHE`、
+`UWE5622_DOCKER_REBUILD=no`（跳过 `docker build`，直接用已有镜像）、
+`UWE5622_DOCKER_BASE`（临时换基础镜像，例如离线环境里的内网镜像）。
+
+> Windows 下用 Git Bash 也能直接跑这个包装脚本（已处理 MSYS 的路径自动转换问题）；
+
+> 说明：digest 固定的是**基础镜像**，其中的 apt 归档仍可能随 Ubuntu 更新而变。
+> 需要连 apt 包版本也完全固定时，把 Dockerfile 里的 `archive.ubuntu.com` 指向
+> `snapshot.ubuntu.com` 的时间戳仓库即可。
 
 ### 3.2 打包镜像
 
