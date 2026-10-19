@@ -1,0 +1,4 @@
+# Keep the shell scripts, device tree sources and the vendored driver sources LF
+# so they keep working when the repository is checked out on Windows.
+* text=auto eol=lf
+*.ko binary

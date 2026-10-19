@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Device tree overlay: enable the Unisoc/Spreadtrum UWE5622 (AW859A)
+ * Wi-Fi/Bluetooth combo on the Orange Pi 3B v1.1 (Rockchip RK3566).
+ *
+ * The mainline device tree already describes the SDIO host (&sdmmc1) and the
+ * mmc-pwrseq that powers the module; the out-of-tree uwe5622 driver needs two
+ * extra nodes that it looks up by itself:
+ *
+ *   sprd-mtty  - "sprd,mtty" platform device, provides /dev/ttyBT0 which is
+ *                used by hciattach + sprdbt_tty for Bluetooth.
+ *   uwe-bsp    - "unisoc,uwe_bsp" platform device.  sdiohal_main.c and
+ *                wcn_boot.c look this node up by name (of_find_node_by_name)
+ *                when the driver is built with CONFIG_RK_BOARD, which also
+ *                enables CONFIG_WCN_PARSE_DTS.
+ *
+ * GPIO mapping (taken from rk3566-orangepi-3b.dtsi):
+ *   wifi_reg_on_h     <0 RK_PD3>  -> wl-reg-on         (27)
+ *   wifi_wake_host_h  <0 RK_PD6>  -> wl-wake-host-gpio (30)
+ *   bt_reg_on_h       <2 RK_PB7>  -> bt-reg-on         (15)
+ *   bt_wake_host_h    <2 RK_PC0>  -> bt-wake-host-gpio (16)
+ *   host_wake_bt_h    <2 RK_PC1>  -> sdio-ext-int-gpio (17)
+ *
+ * Keep this file in sync with the kernel patch
+ *   patch/kernel/archive/rockchip64-<kernel version>/board-orangepi3b-add-uwe5622-wifi-bt-nodes.patch
+ * from https://github.com/armbian/build.
+ */
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	fragment@0 {
+		target-path = "/";
+
+		__overlay__ {
+			sprd-mtty {
+				compatible = "sprd,mtty";
+				sprd,name = "ttyBT";
+			};
+
+			uwe-bsp {
+				compatible = "unisoc,uwe_bsp";
+
+				/* gpio0 RK_PD3, shared with sdio_pwrseq */
+				wl-reg-on = <&gpio0 27 0>;
+				/* gpio2 RK_PB7 */
+				bt-reg-on = <&gpio2 15 0>;
+				/* gpio0 RK_PD6 */
+				wl-wake-host-gpio = <&gpio0 30 0>;
+				/* gpio2 RK_PC0 */
+				bt-wake-host-gpio = <&gpio2 16 0>;
+				/* gpio2 RK_PC1, only used when data-irq is absent */
+				sdio-ext-int-gpio = <&gpio2 17 0>;
+
+				/* Use the in-band SDIO interrupt (DAT1) which is
+				 * enabled by &sdmmc1 / cap-sdio-irq.
+				 */
+				data-irq;
+				/* UWE5622 runs with a 512 byte SDIO block size. */
+				blksz-512;
+				/* Power is handled by sdio_pwrseq, never power-cycle. */
+				keep-power-on;
+			};
+		};
+	};
+};

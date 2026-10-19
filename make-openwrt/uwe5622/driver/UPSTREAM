@@ -1,0 +1,21 @@
+Source : https://github.com/armbian/uwe5622
+Branch : master
+Commit : fa9d1a6703a93a85bcf68e865ebc2726474076ad (2026-10-13)
+License: GPL-2.0
+
+This directory is a verbatim copy of the driver tree, with two changes:
+
+  * reference/, .github/ and workflow_files/ were dropped (they only contain
+    the historical Armbian patch stack and CI files).
+  * unisocwcn/fw/ was dropped.  Its *.bin.hex blobs are only compiled in for
+    CONFIG_WCN_DOWNLOAD_FIRMWARE_FROM_HEX (Amlogic) and CONFIG_WCN_USB, neither
+    of which is used by this Rockchip port.  The runtime firmware
+    (/lib/firmware/uwe5622/wcnmodem.bin) comes from the ophub firmware package.
+
+To update:
+
+    git clone --depth 1 https://github.com/armbian/uwe5622
+    rsync -a --exclude reference --exclude .github --exclude workflow_files \
+             --exclude unisocwcn/fw \
+             uwe5622/{Makefile,Kconfig,unisocwcn,unisocwifi,tty-sdio} \
+             make-openwrt/uwe5622/driver/

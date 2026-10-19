@@ -25,3 +25,9 @@ System bootloader files that are automatically handled by the installation/updat
 ## scripts
 
 When executing `remake`, the required dependency packages for the current server environment are installed automatically. Other script files assist with compiling or building the OpenWrt system.
+
+## uwe5622
+
+Out-of-tree Unisoc UWE5622 (AW859A) Wi-Fi/Bluetooth driver for the Orange Pi 3B v1.1 (RK3566): driver sources, a device tree overlay for the prebuilt board dtb and a script that builds the kernel modules for a specific ophub kernel release. See [uwe5622/README.md](./uwe5622/README.md).
+
+用于 Orange Pi 3B v1.1（RK3566）的 UWE5622（AW859A）无线/蓝牙驱动：驱动源码、给预编译 dtb 用的设备树 overlay，以及按 ophub 内核版本编译模块的脚本。详见 [uwe5622/README.md](./uwe5622/README.md)。
