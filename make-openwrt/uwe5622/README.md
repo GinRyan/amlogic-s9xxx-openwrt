@@ -173,6 +173,52 @@ sudo ./remake -b orangepi-3b -k 6.12.69   # 固定内核版本
 > 若目标内核版本没有对应模块，打包会**直接失败**并提示需要执行的命令，避免产出一个
 > "看着正常但没有 Wi‑Fi"的镜像。确实要跳过时用 `uwe5622_allow_missing_kmods=yes`。
 
+### 3.3 可刷写的镜像在哪里
+
+`build-kmods.sh` **只产出内核模块**，不产出镜像。镜像由 `remake` 在 Linux 上生成
+（immortalwrt rootfs + ophub 内核 + u-boot + 打过补丁的 dtb）。
+
+**本地构建**（Linux 主机，需要 root、loop 设备、btrfs）：
+
+```bash
+# 1) 准备一个 armsr/armv8 的 rootfs（remake 会在 openwrt-armsr/ 里找 *rootfs.tar.gz）
+mkdir -p openwrt-armsr
+wget -O openwrt-armsr/immortalwrt-24.10.2-armsr-armv8-rootfs.tar.gz \
+  https://downloads.immortalwrt.org/releases/24.10.2/targets/armsr/armv8/immortalwrt-24.10.2-armsr-armv8-rootfs.tar.gz
+
+# 2) 为要用的内核编模块
+./make-openwrt/uwe5622/build-kmods.sh -v 6.12.69 -t rk35xx
+
+# 3) 打包（首次会自动下载 u-boot/内核/固件，约 1~2 GB）
+sudo ./remake -b orangepi-3b -k 6.12.69
+```
+
+产物路径（`remake` 的 `out_path`）：
+
+```
+openwrt/out/openwrt_<源代号>_rockchip_orangepi-3b_k<内核版本>_<YYYY.MM.DD>.img
+# 例如 openwrt/out/openwrt_immortalwrt_rockchip_orangepi-3b_k6.12.69_2026.10.20.img
+```
+
+打包日志里应能看到板级钩子的输出，确认驱动真的进了镜像：
+
+```
+[ INFO ] uwe5622: patching [ rk3566-orangepi-3b.dtb ] with the uwe-bsp/sprd-mtty nodes.
+[ INFO ] uwe5622: installed modules for [ 6.12.69-rk35xx-ophub ]:
+```
+
+**GitHub Actions**：跑 `Build OpenWrt system image`（source 选 `immortalwrt_master`，
+board 选 `orangepi-3b`），产物在 Release 里（tag `OpenWrt_<branch>_<storage>_<YYYY.MM>`）。
+
+> ⚠️ 注意：本仓库 3 个打包 workflow 原先写的是
+> `uses: ophub/amlogic-s9xxx-openwrt@main`，那会用**上游**的 `remake`/`make-openwrt`
+> 打包 —— 我们的 `uwe5622` 钩子根本不会执行，镜像里没有驱动。现在已改为本地 action
+> `uses: ./`，确保用的是本仓库的打包逻辑。
+
+**为什么不在本机（Windows Docker）直接构建**：`remake` 的 rootfs 分区固定用 btrfs，
+而 Docker Desktop 的 WSL2 内核没有 btrfs（实测 `mount -t btrfs` 失败），所以必须在
+Linux 主机 / 自定义内核的 WSL / GitHub Actions 上构建。
+
 ---
 
 ## 4. 实现细节

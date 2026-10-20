@@ -397,9 +397,9 @@ jobs:
           chmod +x ${IMAGEBUILDER_SH}
           ${IMAGEBUILDER_SH} ${RELEASES_BRANCH}
           echo "build_tag=OpenWrt_imagebuilder_${RELEASES_BRANCH/:/_}_$(date +"%Y.%m")" >> ${GITHUB_ENV}
-          # Create symbolic link for packaging
+          # Create symbolic link for packaging (the local action runs from the workspace)
           [[ -d "/builder/openwrt" ]] || mkdir -p /builder/openwrt
-          ln -sf /builder/openwrt /home/runner/work/_actions/ophub/amlogic-s9xxx-openwrt/main/openwrt
+          ln -sf /builder/openwrt ${{ github.workspace }}/openwrt
           df -hT ${PWD}
           echo "status=success" >> ${GITHUB_OUTPUT}
 
@@ -417,7 +417,8 @@ jobs:
 
       - name: Package OpenWrt for target boards
         if: ${{ steps.imagebuilder.outputs.status == 'success' && !cancelled() }}
-        uses: ophub/amlogic-s9xxx-openwrt@main
+        # Local action: use this fork's remake + make-openwrt files (uwe5622 hook).
+        uses: ./
         with:
           openwrt_path: output/*rootfs.tar.gz
           openwrt_ip: ${{ inputs.openwrt_ip }}
