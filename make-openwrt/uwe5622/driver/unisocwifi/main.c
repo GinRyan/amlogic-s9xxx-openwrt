@@ -1380,7 +1380,7 @@ static void sprdwl_unregister_wdev(struct sprdwl_vif *vif)
 static struct sprdwl_vif *sprdwl_register_netdev(struct sprdwl_priv *priv,
 						 const char *name,
 						 enum nl80211_iftype type,
-						 u8 *addr)
+						 u8 *addr, bool cfg80211_ctx)
 {
 	struct net_device *ndev;
 	struct wireless_dev *wdev;
@@ -1450,8 +1450,21 @@ static struct sprdwl_vif *sprdwl_register_netdev(struct sprdwl_priv *priv,
 		wdev->iftype = NL80211_IFTYPE_STATION;
 #endif
 
-	/* register new Ethernet interface */
-	ret = register_netdevice(ndev);
+	/*
+	 * Register the netdev.
+	 *
+	 * When called from a cfg80211 op (add_virtual_intf) the wiphy mutex and
+	 * rtnl are already held by cfg80211, so a plain register_netdevice()
+	 * would re-enter cfg80211's netdev notifier and deadlock on the wiphy
+	 * mutex.  cfg80211_register_netdevice() marks the wdev as registering so
+	 * the notifier skips it and does the wdev registration itself.
+	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+	if (cfg80211_ctx)
+		ret = cfg80211_register_netdevice(ndev);
+	else
+#endif
+		ret = register_netdevice(ndev);
 	if (ret) {
 		wl_ndev_log(L_ERR, ndev, "failed to regitster netdev(%d)!\n", ret);
 		goto err;
@@ -1466,19 +1479,28 @@ err:
 	return ERR_PTR(ret);
 }
 
-static void sprdwl_unregister_netdev(struct sprdwl_vif *vif)
+static void sprdwl_unregister_netdev(struct sprdwl_vif *vif, bool cfg80211_ctx)
 {
 	wl_info("iface '%s' deleted\n", vif->ndev->name);
 
 	if (vif->priv->fw_capa & SPRDWL_CAPA_MC_FILTER)
 		kfree(vif->mc_filter);
 	sprdwl_deinit_vif(vif);
-	unregister_netdevice(vif->ndev);
+	/* Same story as in sprdwl_register_netdev(): avoid re-entering the
+	 * cfg80211 netdev notifier while cfg80211 already holds the wiphy mutex.
+	 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 5, 0)
+	if (cfg80211_ctx)
+		cfg80211_unregister_wdev(&vif->wdev);
+	else
+#endif
+		unregister_netdevice(vif->ndev);
 }
 
 struct wireless_dev *sprdwl_add_iface(struct sprdwl_priv *priv,
 				      const char *name,
-				      enum nl80211_iftype type, u8 *addr)
+				      enum nl80211_iftype type, u8 *addr,
+				      bool cfg80211_ctx)
 {
 	struct sprdwl_vif *vif;
 
@@ -1486,9 +1508,9 @@ struct wireless_dev *sprdwl_add_iface(struct sprdwl_priv *priv,
 	if (type == NL80211_IFTYPE_P2P_DEVICE)
 		vif = sprdwl_register_wdev(priv, name, type, addr);
 	else
-		vif = sprdwl_register_netdev(priv, name, type, addr);
+		vif = sprdwl_register_netdev(priv, name, type, addr, cfg80211_ctx);
 #else
-	vif = sprdwl_register_netdev(priv, name, type, addr);
+	vif = sprdwl_register_netdev(priv, name, type, addr, cfg80211_ctx);
 #endif
 
 	if (IS_ERR(vif)) {
@@ -1510,7 +1532,8 @@ struct wireless_dev *sprdwl_add_iface(struct sprdwl_priv *priv,
 	return &vif->wdev;
 }
 
-int sprdwl_del_iface(struct sprdwl_priv *priv, struct sprdwl_vif *vif)
+int sprdwl_del_iface(struct sprdwl_priv *priv, struct sprdwl_vif *vif,
+		     bool cfg80211_ctx)
 {
 #ifdef DFS_MASTER
 	sprdwl_deinit_dfs_master(vif);
@@ -1518,7 +1541,7 @@ int sprdwl_del_iface(struct sprdwl_priv *priv, struct sprdwl_vif *vif)
 	if (!vif->ndev)
 		sprdwl_unregister_wdev(vif);
 	else
-		sprdwl_unregister_netdev(vif);
+		sprdwl_unregister_netdev(vif, cfg80211_ctx);
 
 	return 0;
 }
@@ -1533,7 +1556,7 @@ next_intf:
 		list_del(&vif->vif_node);
 		spin_unlock_bh(&priv->list_lock);
 		rtnl_lock();
-		sprdwl_del_iface(priv, vif);
+		sprdwl_del_iface(priv, vif, false);
 		rtnl_unlock();
 		goto next_intf;
 	}
@@ -1583,7 +1606,7 @@ int sprdwl_core_init(struct device *dev, struct sprdwl_priv *priv)
 	if (is_valid_ether_addr(priv->mac_addr))
 		efuse_mac_addr = priv->mac_addr;
 	rtnl_lock();
-	wdev = sprdwl_add_iface(priv, "wlan%d", NL80211_IFTYPE_STATION, NULL);
+	wdev = sprdwl_add_iface(priv, "wlan%d", NL80211_IFTYPE_STATION, NULL, false);
 	rtnl_unlock();
 	if (IS_ERR(wdev)) {
 		wiphy_unregister(wiphy);
@@ -1593,7 +1616,7 @@ int sprdwl_core_init(struct device *dev, struct sprdwl_priv *priv)
 
 #ifdef CONFIG_P2P_INTF
 	rtnl_lock();
-	wdev = sprdwl_add_iface(priv, "p2p%d", NL80211_IFTYPE_P2P_DEVICE, NULL);
+	wdev = sprdwl_add_iface(priv, "p2p%d", NL80211_IFTYPE_P2P_DEVICE, NULL, false);
 	rtnl_unlock();
 	if (IS_ERR(wdev)) {
 		wiphy_unregister(wiphy);

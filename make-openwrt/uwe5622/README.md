@@ -329,6 +329,37 @@ sprdbt_tty
 
 ---
 
+### 4.6 对上游驱动的修改（cfg80211 建/删接口死锁）
+
+上游 `unisocwifi/main.c` 在 `add_virtual_intf` 回调里直接调 `register_netdevice()`，
+而这条路径是 cfg80211 持着 wiphy 锁进来的；`register_netdevice()` 触发的
+`cfg80211_netdev_notifier_call` 又要拿同一把锁 → 自死锁（内核报 hung task，
+`netifd`/`ucode`/`linkwatch`/`reg_check_chans_work` 全部卡在 `rtnl_lock`）。
+表现就是：**只要 hostapd/netifd 建或删一个虚拟接口，整个网络栈就死掉**
+（OpenWrt 首次启动会自动建一个默认 AP 接口，所以新镜像会"起得来但没有 IP"）。
+删除接口路径（`unregister_netdevice()`）是同一个问题。
+
+本移植的改法（`unisocwifi/main.c`、`unisocwifi/sprdwl.h`、`unisocwifi/cfg80211.c`）：
+
+```c
+/* 来自 cfg80211 op 时（内核 >= 6.5）用 cfg80211 的注册/注销接口：
+ * 它们会先把 wdev 标记为 registering/registered，notifier 便不再抢锁 */
+if (cfg80211_ctx)
+    ret = cfg80211_register_netdevice(ndev);
+else
+    ret = register_netdevice(ndev);            /* probe 时仍用原路径 */
+
+if (cfg80211_ctx)
+    cfg80211_unregister_wdev(&vif->wdev);
+else
+    unregister_netdevice(vif->ndev);
+```
+
+`cfg80211_ctx` 由调用方传入：`sprdwl_cfg80211_add_iface()`/`del_iface()` 传 `true`，
+probe 和卸载路径传 `false`。这样既不改变首次注册的行为，又消除了运行期死锁。
+
+---
+
 ## 5. 板上验证
 
 ```sh
@@ -419,12 +450,9 @@ curl -fsSL https://github.com/ophub/kernel/releases/expanded_assets/kernel_rk35x
 
 * 只针对 Orange Pi 3B **v1.1**（UWE5622/AW859A）。v2.1 用 AP6256，走 brcmfmac，
   不需要（也打不上）这个 overlay。
-* **AP 模式暂不可用**：用 `iw phy ... interface add ... type __ap` 新建虚拟接口时，
-  驱动的 `sprdwl_add_iface()` 在 cfg80211 持锁路径里调 `register_netdevice()`，
-  cfg80211 的 netdev notifier 又要拿同一把锁，形成死锁（内核报 hung task，wifi 子系统
-  卡到重启）。STA 不做 `add_virtual_intf`，所以不受影响。若将来需要 AP，需改驱动：
-  把 `register_netdevice()` 换成 `cfg80211_register_wdev()`，或在 probe 时预注册一个
-  AP 类型的 vif。
+* **AP 模式**：新建/删除虚拟接口在**上游驱动里会死锁**（原因见 4.6）；
+  本仓库已按 4.6 打了补丁（`cfg80211_register_netdevice()` /
+  `cfg80211_unregister_wdev()`），需要重新编译模块并重新验证。
 * 蓝牙未打通：`sprdbt_tty` 注册 `ttyBT0` 时报 `-EEXIST`（`mtty probe ... failed with
   error -17`），且 Armbian 的 `hciattach_opi` 未随本移植分发。
 * rootfs 必须带 `wpad-openssl wifi-scripts iwinfo iw`，否则 `wifi`/LuCI 无线页不可用；

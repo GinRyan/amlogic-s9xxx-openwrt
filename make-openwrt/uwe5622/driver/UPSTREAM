@@ -12,6 +12,17 @@ This directory is a verbatim copy of the driver tree, with two changes:
     of which is used by this Rockchip port.  The runtime firmware
     (/lib/firmware/uwe5622/wcnmodem.bin) comes from the ophub firmware package.
 
+Local modification (not in upstream), see README.md "对上游驱动的修改":
+
+  * unisocwifi/main.c, unisocwifi/sprdwl.h, unisocwifi/cfg80211.c:
+    register/unregister the extra netdev through cfg80211_register_netdevice()
+    and cfg80211_unregister_wdev() when the call comes from a cfg80211 op.
+    Upstream calls register_netdevice()/unregister_netdevice() there, which
+    re-enters the cfg80211 netdev notifier while cfg80211 already holds the
+    wiphy mutex, deadlocking the whole networking stack (hung tasks in
+    netifd/ucode/rtnl_lock) as soon as hostapd/netifd creates or deletes a
+    virtual interface.
+
 To update:
 
     git clone --depth 1 https://github.com/armbian/uwe5622

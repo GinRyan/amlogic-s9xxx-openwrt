@@ -559,7 +559,7 @@ static struct wireless_dev *sprdwl_cfg80211_add_iface(struct wiphy *wiphy,
 		}
 	}
 
-	return sprdwl_add_iface(priv, name, iftype, params->macaddr);
+	return sprdwl_add_iface(priv, name, iftype, params->macaddr, true);
 }
 #endif
 
@@ -581,7 +581,7 @@ static int sprdwl_cfg80211_del_iface(struct wiphy *wiphy,
 	spin_unlock_bh(&priv->list_lock);
 
 	if (vif != NULL) {
-		sprdwl_del_iface(priv, vif);
+		sprdwl_del_iface(priv, vif, true);
 
 		spin_lock_bh(&priv->list_lock);
 		list_del(&vif->vif_node);

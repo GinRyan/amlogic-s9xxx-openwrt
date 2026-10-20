@@ -402,8 +402,10 @@ void sprdwl_net_flowcontrl(struct sprdwl_priv *priv,
 
 struct wireless_dev *sprdwl_add_iface(struct sprdwl_priv *priv,
 				      const char *name,
-				      enum nl80211_iftype type, u8 *addr);
-int sprdwl_del_iface(struct sprdwl_priv *priv, struct sprdwl_vif *vif);
+				      enum nl80211_iftype type, u8 *addr,
+				      bool cfg80211_ctx);
+int sprdwl_del_iface(struct sprdwl_priv *priv, struct sprdwl_vif *vif,
+		     bool cfg80211_ctx);
 struct sprdwl_priv *sprdwl_core_create(enum sprdwl_hw_type type,
 				       struct sprdwl_if_ops *ops);
 void sprdwl_core_free(struct sprdwl_priv *priv);
