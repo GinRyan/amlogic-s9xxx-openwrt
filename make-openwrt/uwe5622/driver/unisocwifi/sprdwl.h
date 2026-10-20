@@ -89,6 +89,9 @@ struct scan_result {
 	unsigned char bssid[6];
 };
 
+/* Associated stations kept for cfg80211's dump_station() (AP mode). */
+#define SPRDWL_MAX_TRACKED_STA 16
+
 struct sprdwl_vif {
 	struct net_device *ndev;	/* Linux net device */
 	struct wireless_dev wdev;	/* Linux wireless device */
@@ -110,6 +113,10 @@ struct sprdwl_vif {
 	u8 bssid[ETH_ALEN];
 	unsigned char beacon_loss;
 	bool local_mac_flag;
+
+	/* softap peer bookkeeping, protected by priv->list_lock */
+	u8 sta_addr[SPRDWL_MAX_TRACKED_STA][ETH_ALEN];
+	int sta_count;
 
 	/* encryption stuff */
 	u8 prwise_crypto;

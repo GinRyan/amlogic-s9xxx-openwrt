@@ -1454,6 +1454,142 @@ out:
 
 
 
+/*
+ * cfg80211 needs dump_station() to enumerate the peers of an interface: this is
+ * what libiwinfo (and therefore LuCI) uses for the signal/bitrate of a client
+ * interface and for the "associated stations" list of an AP interface.
+ */
+
+/* Keep the set of softap peers; protected by priv->list_lock. */
+static void sprdwl_track_sta_add(struct sprdwl_vif *vif, const u8 *addr)
+{
+	int i;
+
+	if (!addr)
+		return;
+
+	spin_lock_bh(&vif->priv->list_lock);
+	for (i = 0; i < vif->sta_count; i++) {
+		if (ether_addr_equal(vif->sta_addr[i], addr))
+			goto out;
+	}
+	if (vif->sta_count < SPRDWL_MAX_TRACKED_STA)
+		ether_addr_copy(vif->sta_addr[vif->sta_count++], addr);
+out:
+	spin_unlock_bh(&vif->priv->list_lock);
+}
+
+static void sprdwl_track_sta_del(struct sprdwl_vif *vif, const u8 *addr)
+{
+	int i;
+
+	if (!addr)
+		return;
+
+	spin_lock_bh(&vif->priv->list_lock);
+	for (i = 0; i < vif->sta_count; i++) {
+		if (ether_addr_equal(vif->sta_addr[i], addr)) {
+			vif->sta_count--;
+			if (i != vif->sta_count)
+				ether_addr_copy(vif->sta_addr[i],
+						vif->sta_addr[vif->sta_count]);
+			break;
+		}
+	}
+	spin_unlock_bh(&vif->priv->list_lock);
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+static int sprdwl_cfg80211_dump_station(struct wiphy *wiphy,
+					struct wireless_dev *wdev, int idx,
+					u8 *mac, struct station_info *sinfo)
+#else
+static int sprdwl_cfg80211_dump_station(struct wiphy *wiphy,
+					struct net_device *ndev, int idx,
+					u8 *mac, struct station_info *sinfo)
+#endif
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
+	struct net_device *ndev = wdev->netdev;
+#endif
+	struct sprdwl_vif *vif = netdev_priv(ndev);
+	struct sprdwl_cmd_get_station sta;
+	struct sprdwl_rate_info *rate;
+	int ret;
+
+	memset(sinfo, 0, sizeof(*sinfo));
+
+	if (vif->mode != SPRDWL_MODE_AP) {
+		/* client: the only peer is the AP we are associated with */
+		if (idx != 0 || is_zero_ether_addr(vif->bssid))
+			return -ENOENT;
+		ether_addr_copy(mac, vif->bssid);
+	} else {
+		/* softap: walk the peers reported by the firmware */
+		spin_lock_bh(&vif->priv->list_lock);
+		if (idx >= vif->sta_count) {
+			spin_unlock_bh(&vif->priv->list_lock);
+			return -ENOENT;
+		}
+		ether_addr_copy(mac, vif->sta_addr[idx]);
+		spin_unlock_bh(&vif->priv->list_lock);
+	}
+
+	ret = sprdwl_get_station(vif->priv, vif->ctx_id, &sta);
+	if (ret)
+		return ret;
+	rate = (struct sprdwl_rate_info *)&sta;
+
+	sinfo->filled |= BIT(NL80211_STA_INFO_TX_BYTES) |
+			 BIT(NL80211_STA_INFO_TX_PACKETS) |
+			 BIT(NL80211_STA_INFO_RX_BYTES) |
+			 BIT(NL80211_STA_INFO_RX_PACKETS);
+	sinfo->tx_bytes = ndev->stats.tx_bytes;
+	sinfo->tx_packets = ndev->stats.tx_packets;
+	sinfo->rx_bytes = ndev->stats.rx_bytes;
+	sinfo->rx_packets = ndev->stats.rx_packets;
+
+	sinfo->signal = sta.signal;
+	sinfo->filled |= BIT(NL80211_STA_INFO_SIGNAL);
+
+	sinfo->tx_failed = sta.txfailed;
+	sinfo->filled |= BIT(NL80211_STA_INFO_TX_BITRATE) |
+			 BIT(NL80211_STA_INFO_TX_FAILED);
+
+	if (!(rate->flags & 0x1c))
+		sinfo->txrate.bw = RATE_INFO_BW_20;
+	if (rate->flags & BIT(2))
+		sinfo->txrate.bw = RATE_INFO_BW_40;
+	if (rate->flags & BIT(3))
+		sinfo->txrate.bw = RATE_INFO_BW_80;
+	if ((rate->flags & BIT(4)) || (rate->flags & BIT(5)))
+		sinfo->txrate.bw = RATE_INFO_BW_160;
+	if (rate->flags & BIT(6))
+		sinfo->txrate.flags |= RATE_INFO_FLAGS_SHORT_GI;
+
+	if ((rate->flags & RATE_INFO_FLAGS_MCS) ||
+	    (rate->flags & RATE_INFO_FLAGS_VHT_MCS)) {
+		sinfo->txrate.flags = (rate->flags & 0x3);
+		sinfo->txrate.mcs = rate->mcs;
+		if ((rate->flags & RATE_INFO_FLAGS_VHT_MCS) && rate->nss)
+			sinfo->txrate.nss = rate->nss;
+	} else {
+		sinfo->txrate.legacy = rate->legacy;
+	}
+
+	return 0;
+}
+
+static int sprdwl_cfg80211_get_tx_power(struct wiphy *wiphy,
+					struct wireless_dev *wdev, int *dbm)
+{
+	/* The firmware does not report the live TX power back; expose the value
+	 * the radio is configured with (the DTS caps the channels at 20 dBm). */
+	*dbm = 20;
+
+	return 0;
+}
+
 static int sprdwl_cfg80211_set_channel(struct wiphy *wiphy,
 				       struct net_device *ndev,
 				       struct ieee80211_channel *chan)
@@ -1491,6 +1627,7 @@ void sprdwl_report_softap(struct sprdwl_vif *vif, u8 is_connect, u8 *addr,
 			netif_carrier_on(vif->ndev);
 			netif_wake_queue(vif->ndev);
 		}
+		sprdwl_track_sta_add(vif, addr);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 		cfg80211_new_sta(&vif->wdev, addr, &sinfo, GFP_KERNEL);
 #else
@@ -1498,6 +1635,7 @@ void sprdwl_report_softap(struct sprdwl_vif *vif, u8 is_connect, u8 *addr,
 #endif
 		wl_ndev_log(L_DBG, vif->ndev, "New station (%pM) connected\n", addr);
 	} else {
+		sprdwl_track_sta_del(vif, addr);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 1, 0)
 		cfg80211_del_sta(&vif->wdev, addr, GFP_KERNEL);
 #else
@@ -3691,6 +3829,8 @@ static struct cfg80211_ops sprdwl_cfg80211_ops = {
 	.del_station = sprdwl_cfg80211_del_station,
 	.change_station = sprdwl_cfg80211_change_station,
 	.get_station = sprdwl_cfg80211_get_station,
+	.dump_station = sprdwl_cfg80211_dump_station,
+	.get_tx_power = sprdwl_cfg80211_get_tx_power,
 	.libertas_set_mesh_channel = sprdwl_cfg80211_set_channel,
 	.scan = sprdwl_cfg80211_scan,
 	.connect = sprdwl_cfg80211_connect,

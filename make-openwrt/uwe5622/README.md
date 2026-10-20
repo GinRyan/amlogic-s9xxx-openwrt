@@ -358,6 +358,33 @@ else
 `cfg80211_ctx` 由调用方传入：`sprdwl_cfg80211_add_iface()`/`del_iface()` 传 `true`，
 probe 和卸载路径传 `false`。这样既不改变首次注册的行为，又消除了运行期死锁。
 
+### 4.7 让 LuCI 显示信号/速率/站点列表
+
+libiwinfo（LuCI 的无线页面）取信号强度、协商速率和"已连接站点"列表，走的都是
+`NL80211_CMD_GET_STATION` + `NLM_F_DUMP`，也就是驱动的 `dump_station` 回调；
+Tx-Power 则走 `get_tx_power`。上游驱动这两个回调都没实现，所以：
+
+* 客户端模式下 `iwinfo` 显示 `Signal: unknown`、`Bit Rate: unknown`；
+* AP 模式下"已连接站点"永远为空；
+* `Tx-Power` 恒为 0 dBm。
+
+本移植补了三处（`unisocwifi/cfg80211.c`、`unisocwifi/sprdwl.h`）：
+
+1. `.dump_station`：客户端模式返回所连 AP 的 BSSID + 固件上报的信号/速率；
+   AP 模式遍历 `sprdwl_report_softap()` 里维护的对端 MAC 表；
+2. `.get_tx_power`：返回射频配置的 20 dBm（固件不回读实际功率）；
+3. `struct sprdwl_vif` 增加 `sta_addr[]`/`sta_count`，在 `sprdwl_report_softap()`
+   里维护 AP 模式的关联站点表。
+
+改完后 `iwinfo` 输出示例（真机）：
+
+```
+phy0-sta0 ESSID: "Gin6-5G"
+          Tx-Power: 20 dBm  Link Quality: 70/70
+          Signal: -39 dBm  Noise: unknown
+          Bit Rate: 390.0 MBit/s
+```
+
 ---
 
 ## 5. 板上验证
