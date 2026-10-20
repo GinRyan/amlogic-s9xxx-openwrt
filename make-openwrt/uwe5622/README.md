@@ -193,6 +193,11 @@ wget -O openwrt-armsr/immortalwrt-24.10.2-armsr-armv8-rootfs.tar.gz \
 sudo ./remake -b orangepi-3b -k 6.12.69
 ```
 
+> ⚠️ rootfs 里必须带无线的用户态包，否则镜像能起、驱动也能加载，但 `wifi` 命令和
+> LuCI 的"无线"页面都不可用（armsr 默认包集合不含它们）。最少需要：
+> `wpad-openssl wifi-scripts iwinfo iw`。用 ImageBuilder 构建时把这几个加进
+> `PACKAGES=` 即可。
+
 产物路径（`remake` 的 `out_path`）：
 
 ```
@@ -215,9 +220,10 @@ board 选 `orangepi-3b`），产物在 Release 里（tag `OpenWrt_<branch>_<stor
 > 打包 —— 我们的 `uwe5622` 钩子根本不会执行，镜像里没有驱动。现在已改为本地 action
 > `uses: ./`，确保用的是本仓库的打包逻辑。
 
-**为什么不在本机（Windows Docker）直接构建**：`remake` 的 rootfs 分区固定用 btrfs，
-而 Docker Desktop 的 WSL2 内核没有 btrfs（实测 `mount -t btrfs` 失败），所以必须在
-Linux 主机 / 自定义内核的 WSL / GitHub Actions 上构建。
+**关于在 Windows + Docker 里构建**：Docker Desktop 的 WSL2 内核**自带 btrfs**，
+`remake` 可以在特权容器里跑通；唯一需要处理的是容器内没有 udev，`losetup -P` 之后
+`/dev/loopXpN` 不会自动出现，需要一个 `losetup` 包装脚本按 `/sys/class/block/...`
+建好节点。arm64 模块仍然按 `3.1` 交叉编译。
 
 ---
 
@@ -396,13 +402,33 @@ curl -fsSL https://github.com/ophub/kernel/releases/expanded_assets/kernel_rk35x
 * `depmod` + `modprobe --show-depends sprdwl_ng` 给出的加载顺序是
   `cfg80211 → uwe5622_bsp_sdio → sprdwl_ng`，与 `/etc/modules.d/50-uwe5622` 一致。
 
-**未验证**：真机上的射频表现（扫描/连接/吞吐/休眠/蓝牙配对）。
+**已验证（Orange Pi 3B v1.1 真机，ImmortalWrt 24.10.2 + `6.12.69-rk35xx-ophub`）**：
+
+* SDIO 枚举成功：`mmc2:8800:1`，`new ultra high speed SDR104 SDIO card at address 8800`，
+  总线 148.5 MHz，`DRIVER=sdiohal`；
+* 芯片识别 `chipid: 0x2355b001`，与固件 `wifi_2355b001_1ant.ini` 对应；
+* 固件下载成功：`marlin_firmware_write finish and successful` →
+  `then marlin download finished and run ok`，CP 版本
+  `MARLIN3_19B_W21.05.3~sc2355_marlin3_lite_ott`；
+* 射频校准：`cali_ini_need_download return 1`、`get_board_ant_num [one_ant]`、
+  `wifi ini path = /lib/firmware/uwe5622/wifi_2355b001_1ant.ini`；
+* 注册出 `phy0` / `wlan0`（MAC 由 efuse 读出），`iw dev wlan0 scan` 能扫到多个 AP
+  （实测 8 个，信号 -30 ~ -70 dBm，RSN/WPA2 解析正常）——**STA 模式可用**。
 
 **限制**：
 
 * 只针对 Orange Pi 3B **v1.1**（UWE5622/AW859A）。v2.1 用 AP6256，走 brcmfmac，
   不需要（也打不上）这个 overlay。
+* **AP 模式暂不可用**：用 `iw phy ... interface add ... type __ap` 新建虚拟接口时，
+  驱动的 `sprdwl_add_iface()` 在 cfg80211 持锁路径里调 `register_netdevice()`，
+  cfg80211 的 netdev notifier 又要拿同一把锁，形成死锁（内核报 hung task，wifi 子系统
+  卡到重启）。STA 不做 `add_virtual_intf`，所以不受影响。若将来需要 AP，需改驱动：
+  把 `register_netdevice()` 换成 `cfg80211_register_wdev()`，或在 probe 时预注册一个
+  AP 类型的 vif。
+* 蓝牙未打通：`sprdbt_tty` 注册 `ttyBT0` 时报 `-EEXIST`（`mtty probe ... failed with
+  error -17`），且 Armbian 的 `hciattach_opi` 未随本移植分发。
+* rootfs 必须带 `wpad-openssl wifi-scripts iwinfo iw`，否则 `wifi`/LuCI 无线页不可用；
+  这些包在板子上属于 **`aarch64_generic`** 架构（不是 `aarch64_cortex-a53`）。
 * ophub 的内核是 mainline + Rockchip BSP 补丁。若某次 BSP 补丁改动了 MMC/cfg80211
   等公共结构体，理论上会影响模块 ABI；用 `-s <内核源码树>` 针对打过补丁的树编译即可消除。
-* 蓝牙只做到"模块 + `ttyBT0` 就位"，Armbian 的 `hciattach_opi` 二进制未随本移植分发。
 * 树外模块与内核版本强绑定：仓库里提交的 `.ko` 只对应 `build-info.txt` 里记录的那个版本。
