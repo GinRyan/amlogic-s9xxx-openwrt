@@ -385,6 +385,11 @@ phy0-sta0 ESSID: "Gin6-5G"
           Bit Rate: 390.0 MBit/s
 ```
 
+> ⚠️ 接收速率是**估算值**：固件 `WIFI_CMD_GET_STATION` 只回一个 rate（发送速率），RX 描述符
+> 里也没有 rate 字段，所以 `dump_station` 把 TX rate 镜像到 `rxrate`
+> （`NL80211_STA_INFO_RX_BITRATE`），让 iwinfo/LuCI 的 "RX Rate" 不再是 0/unknown。
+> 这是显示兜底，不是接收链路的实测速率。
+
 ---
 
 ## 5. 板上验证

@@ -1318,6 +1318,10 @@ static int sprdwl_cfg80211_get_station(struct wiphy *wiphy,
 	wl_ndev_log(L_DBG, wdev->netdev, "%s signal %d legacy %d mcs:%d flags:0x:%x\n",
 			__func__, sinfo->signal, sinfo->txrate.legacy,
 			rate->mcs, rate->flags);
+
+	/* Firmware has no RX rate; mirror the TX rate (estimated). */
+	sinfo->rxrate = sinfo->txrate;
+	sinfo->filled |= BIT(NL80211_STA_INFO_RX_BITRATE);
 out:
 	return ret;
 }
@@ -1576,6 +1580,16 @@ static int sprdwl_cfg80211_dump_station(struct wiphy *wiphy,
 	} else {
 		sinfo->txrate.legacy = rate->legacy;
 	}
+
+	/*
+	 * The firmware only returns one rate (the TX rate): neither the
+	 * WIFI_CMD_GET_STATION response nor the RX descriptors carry the
+	 * receive rate.  Mirror the TX rate into rxrate so libiwinfo shows a
+	 * plausible "RX Rate" instead of 0/unknown.  This is an estimate, not a
+	 * measurement of the receive path.
+	 */
+	sinfo->rxrate = sinfo->txrate;
+	sinfo->filled |= BIT(NL80211_STA_INFO_RX_BITRATE);
 
 	return 0;
 }
