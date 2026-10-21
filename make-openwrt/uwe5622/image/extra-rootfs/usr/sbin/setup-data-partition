@@ -1,0 +1,102 @@
+#!/bin/sh
+# Create a DATA partition in the free space left after the rootfs partition,
+# format it as btrfs, mount it at /mnt/data and point Docker's data-root at it.
+#
+# The image is intentionally small (~4 GiB): the first boot turns the rest of
+# the eMMC/SD card into a data partition.  The script is idempotent and safe to
+# call on every boot.
+#
+# Usage: setup-data-partition [block-device]
+#        (without an argument the device holding / is autodetected)
+
+LOG=/tmp/setup-data.log
+exec >>"${LOG}" 2>&1
+echo "=== $(date) setup-data-partition ==="
+
+target=/mnt/data
+label=DATA
+
+disk="$1"
+if [ -z "${disk}" ]; then
+	root="$(awk '$2=="/"{print $1; exit}' /proc/mounts)"
+	case "${root}" in
+		*p[0-9]*) disk="${root%p*}" ;;
+		*)         disk="$(echo "${root}" | sed 's/[0-9]*$//')" ;;
+	esac
+fi
+[ -b "${disk}" ] || { echo "ERROR: [${disk}] is not a block device"; exit 1; }
+
+case "${disk}" in
+	*[0-9]) part="${disk}p3" ;;
+	*)      part="${disk}3" ;;
+esac
+echo "disk=${disk} part=${part}"
+
+mount_part() {
+	mkdir -p "${target}"
+	if ! grep -q " ${target} " /proc/mounts; then
+		mount -t btrfs "${part}" "${target}" || return 1
+	fi
+	mkdir -p "${target}/docker"
+	# Docker's default data-root is /opt/docker -> put it on the big partition.
+	if [ ! -L /opt/docker ]; then
+		mkdir -p /opt
+		rm -rf /opt/docker
+		ln -sfn "${target}/docker" /opt/docker
+	fi
+	echo "mounted ${part} on ${target} (docker data-root -> ${target}/docker)"
+}
+
+# Already formatted? Just mount it.
+if [ -b "${part}" ] && btrfs filesystem show "${part}" >/dev/null 2>&1; then
+	mount_part && exit 0
+fi
+
+if [ ! -b "${part}" ]; then
+	# The image is smaller than the medium it was flashed to, so the GPT still
+	# describes the small size: sgdisk -e relocates the backup header to the
+	# real end of the disk, then we append partition 3 in the free space.
+	echo "fixing GPT backup header"
+	sgdisk -e "${disk}" || { echo "ERROR: sgdisk -e failed"; exit 1; }
+
+	echo "appending partition 3 in the free space"
+	sgdisk -n 3:0:0 -c 3:"${label}" -t 3:8300 "${disk}" || {
+		echo "ERROR: could not create partition 3 (no free space?)"; exit 1; }
+
+	partx -a -u "${disk}" >/dev/null 2>&1 || true
+	i=0
+	while [ ! -b "${part}" ] && [ "${i}" -lt 20 ]; do
+		mdev -s 2>/dev/null
+		# No udev/mdev (e.g. minimal container): create the node ourselves.
+		s="/sys/class/block/$(basename "${part}")/dev"
+		if [ ! -b "${part}" ] && [ -e "${s}" ]; then
+			set -- $(tr ':' ' ' < "${s}")
+			mknod "${part}" b "$1" "$2" 2>/dev/null || true
+		fi
+		i=$((i + 1))
+		sleep 0.5
+	done
+	[ -b "${part}" ] || { echo "ERROR: ${part} did not appear"; exit 1; }
+fi
+
+sectors="$(blockdev --getsz "${part}" 2>/dev/null || echo 0)"
+if [ "${sectors}" -gt 0 ] && [ "${sectors}" -lt 524288 ]; then
+	echo "WARNING: ${part} is only $((sectors / 2048)) MiB, keeping it anyway"
+fi
+
+echo "formatting ${part}"
+mkfs.btrfs -f -L "${label}" "${part}" || { echo "ERROR: mkfs failed"; exit 1; }
+
+# Register it in /etc/config/fstab for the following boots.
+if ! uci -q show fstab."${label}" >/dev/null 2>&1; then
+	uci -q add fstab mount >/dev/null 2>&1
+	uci -q set fstab.@mount[-1].target="${target}"
+	uci -q set fstab.@mount[-1].device="LABEL=${label}"
+	uci -q set fstab.@mount[-1].fstype="btrfs"
+	uci -q set fstab.@mount[-1].options="noatime"
+	uci -q set fstab.@mount[-1].enabled="1"
+	uci -q commit fstab
+fi
+
+mount_part
+echo "done"

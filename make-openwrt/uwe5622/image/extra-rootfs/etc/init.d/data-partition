@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# First-boot setup of the DATA partition (see /usr/sbin/setup-data-partition).
+# Runs before dockerd/fstab-independent services so Docker's data-root can be
+# relocated onto the big partition.
+START=90
+
+boot() {
+	[ -x /usr/sbin/setup-data-partition ] || return 0
+	/usr/sbin/setup-data-partition
+}
+
+start() {
+	boot
+}

@@ -198,6 +198,21 @@ sudo ./remake -b orangepi-3b -k 6.12.69
 > `wpad-openssl wifi-scripts iwinfo iw`。用 ImageBuilder 构建时把这几个加进
 > `PACKAGES=` 即可。
 
+**用本仓库的脚本构建（v7+ 镜像的完整流程）**：Docker 构建容器、ImageBuilder/remake
+打包、EasyTier ipk 下载、首次启动数据分区脚本都在
+[`make-openwrt/uwe5622/image/`](image/README.md)：
+
+```bash
+./make-openwrt/uwe5622/image/rebuild-kmods.sh        # 编模块（固定容器）
+./make-openwrt/uwe5622/image/fetch-easytier-ipks.sh  # 下载 EasyTier ipk
+docker run --rm --privileged \
+    -v "$PWD/..:/work" -v "$PWD/../out:/out" -v openwrt-imgbuild:/build \
+    openwrt-image-builder:1 bash /work/amlogic-s9xxx-openwrt/make-openwrt/uwe5622/image/build-image.sh
+docker run --rm --privileged \
+    -v "$PWD/..:/work" -v "$PWD/../out:/out" \
+    openwrt-image-builder:1 bash /work/amlogic-s9xxx-openwrt/make-openwrt/uwe5622/image/finalize-image.sh
+```
+
 产物路径（`remake` 的 `out_path`）：
 
 ```
@@ -253,7 +268,7 @@ v9 又改成"小镜像 + 首次启动自动建数据分区"（日常推荐用它
 | 项目 | 说明 |
 | --- | --- |
 | 镜像大小 | `remake -s 4096`，raw 约 4.4 GiB / `.img.gz` 约 346 MB |
-| 首次启动 | `/etc/init.d/data-partition`（S90）调用 `/usr/sbin/setup-data-partition`：`sgdisk -e` 修正 GPT 备份头到磁盘末端，再 `sgdisk -n 3:0:0` 把剩余空间建成第 3 分区，`mkfs.btrfs -L DATA`，挂到 `/mnt/data` |
+| 首次启动 | `/etc/init.d/data-partition`（S90）调用 `/usr/sbin/setup-data-partition`（源码在 `make-openwrt/uwe5622/image/extra-rootfs/`）：`sgdisk -e` 修正 GPT 备份头到磁盘末端，再 `sgdisk -n 3:0:0` 把剩余空间建成第 3 分区，`mkfs.btrfs -L DATA`，挂到 `/mnt/data` |
 | Docker 数据 | `/opt/docker` 变成指向 `/mnt/data/docker` 的符号链接，Docker 的数据自然落在数据分区 |
 | 后续启动 | `/etc/config/fstab` 里已写入 `LABEL=DATA → /mnt/data`，开机自动挂载；脚本本身幂等（已格式化就只挂载） |
 | 手动触发 | `setup-data-partition`（无参数自动识别根盘，也可传 `/dev/mmcblk0` 等） |

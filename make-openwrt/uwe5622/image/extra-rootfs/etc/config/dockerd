@@ -1,0 +1,28 @@
+# Docker daemon UCI configuration (generated for the btrfs rootfs of the
+# Orange Pi 3B image).  The init script turns this into
+# /tmp/dockerd/daemon.json at start time.
+
+config globals 'globals'
+	option data_root '/opt/docker/'
+	option log_level 'warn'
+	option iptables '1'
+	# rootfs is btrfs: use the native btrfs storage driver instead of
+	# overlay2 (overlay-on-btrfs is fragile).
+	option storage_driver 'btrfs'
+#	option alt_config_file '/etc/docker/daemon.json'
+#	option log_driver 'local'
+#	list hosts 'unix:///var/run/docker.sock'
+#	option bip '172.18.0.1/24'
+#	option fixed_cidr '172.17.0.0/16'
+#	option ipv6 '1'
+#	list dns '172.17.0.1'
+#	list registry_mirrors 'https://<my-docker-mirror-host>'
+
+config proxies 'proxies'
+#	option http_proxy 'http://proxy.example.com:3128'
+#	option https_proxy 'https://proxy.example.com:3129'
+#	option no_proxy '*.test.example.com,.example.org,127.0.0.0/8'
+
+config firewall 'firewall'
+	option device 'docker0'
+	list blocked_interfaces 'wan'
