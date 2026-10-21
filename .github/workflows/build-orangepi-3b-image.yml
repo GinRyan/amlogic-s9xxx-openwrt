@@ -168,11 +168,31 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-      - name: Create a release
-        if: ${{ env.RELEASE_TAG != '' }}
+      - name: Package the release zip
+        run: |
+          set -euo pipefail
+          cd out
+          zip -0 -j "openwrt_orangepi-3b_${TAG}_k${KVER}.zip" ./*.img.gz ./*.img.gz.sha256
+          ls -lh ./*.zip
+
+      - name: Resolve the release tag
+        id: release
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG}"
+          # A push of an opi3b-* tag releases under that tag.
+          if [ -z "${tag}" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == opi3b-* ]]; then
+            tag="${GITHUB_REF_NAME}"
+          fi
+          # Otherwise generate one so every run publishes a release.
+          [ -n "${tag}" ] || tag="opi3b-${TAG}-k${KVER}-$(date -u +%Y%m%d-%H%M)"
+          echo "tag=${tag}" >>"${GITHUB_OUTPUT}"
+          echo "release tag: ${tag}"
+
+      - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: ${{ steps.release.outputs.tag }}
           name: Orange Pi 3B ${{ env.TAG }} (kernel ${{ env.KVER }})
           body: |
             ImmortalWrt image for the Orange Pi 3B v1.1 (rk3566 + UWE5622).
@@ -184,7 +204,10 @@ jobs:
               luci-theme-argon, docker/dockerd/compose + luci-app-dockerman,
               EasyTier + luci-app-easytier
             * root password: `password` (change it after the first login)
+            * download `openwrt_orangepi-3b_${{ env.TAG }}_k${{ env.KVER }}.zip`
+              (image + sha256), or the individual `.img.gz` / `.sha256` files
           files: |
+            out/*.zip
             out/*.img.gz
             out/*.img.gz.sha256
           generate_release_notes: false

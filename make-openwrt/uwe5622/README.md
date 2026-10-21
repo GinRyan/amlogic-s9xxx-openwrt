@@ -324,7 +324,7 @@ v8=55296、v9=4096）、`TAG`（v7/v8/v9），以及 EasyTier ipk 的 `IPK_DIR`�
 **GitHub Actions**：新增 `.github/workflows/build-orangepi-3b-image.yml`，把上面整条链路
 串起来（手动触发，参数：`kernel_version` / `rootfs_mb` / `tag` / 可选 `release_tag`）。
 它会在 runner 上构建两个容器、下载 ImageBuilder、拉取 EasyTier ipk、跑 `build-image.sh`
-与 `finalize-image.sh`，产物上传为 artifact；填了 `release_tag` 时同时发 Release。
+→ `verify-image.sh`，产物上传为 artifact，并**每次都发布 Release**：把镜像和 sha256 打包成 `openwrt_orangepi-3b_<tag>_k<kernel>.zip` 一起附上（Release tag 优先级：手动 `release_tag` > 推送 `opi3b-*` 标签 > 自动生成 `opi3b-<tag>-k<kernel>-<UTC 时间>`）。
 
 **只对 Orange Pi 3B 生效的条件编译**：板级钩子文件只存在于
 `make-openwrt/openwrt-files/different-files/orangepi-3b/rootfs/etc/openwrt-board-release.conf`，
