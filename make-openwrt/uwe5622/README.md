@@ -225,6 +225,38 @@ board 选 `orangepi-3b`），产物在 Release 里（tag `OpenWrt_<branch>_<stor
 `/dev/loopXpN` 不会自动出现，需要一个 `losetup` 包装脚本按 `/sys/class/block/...`
 建好节点。arm64 模块仍然按 `3.1` 交叉编译。
 
+### 3.4 v7 镜像附带的额外组件（Argon / Docker / EasyTier）
+
+v7 在 v6（驱动修复版）的基础上预装了：
+
+| 组件 | 包 / 文件 | 备注 |
+| --- | --- | --- |
+| LuCI Argon 主题 | `luci-theme-argon`、`luci-app-argon-config`、`luci-i18n-argon-config-zh-cn` | 来自 luci feed；LuCI → 系统 → 语言和界面里选 Argon |
+| Docker | `docker`、`dockerd`、`containerd`、`docker-compose`、`luci-app-dockerman` | 内核 6.12.69 的 cgroup2/namespace/overlay/veth/netfilter 模块齐全 |
+| cgroup 挂载 | `cgroupfs-mount` | 容器内 OpenWrt 默认不挂 cgroup2，这个包负责挂载 |
+| EasyTier | `/usr/bin/easytier-core`、`/usr/bin/easytier-cli` + `/etc/init.d/easytier` + `/etc/config/easytier` | ImmortalWrt feed 里**没有** easytier 的 ipk，直接用官方静态二进制（aarch64）烘进镜像 |
+
+Docker 的 `/etc/config/dockerd` 已预置 `option storage_driver 'btrfs'`（根文件系统是
+btrfs，避免 overlay-on-btrfs 的坑），`data_root` 默认 `/opt/docker/`。开启：
+
+```sh
+/etc/init.d/dockerd enable && /etc/init.d/dockerd start
+docker run --rm hello-world
+```
+
+EasyTier 开启（默认 `enabled '0'`）：
+
+```sh
+uci set easytier.easytier.enabled='1'
+uci set easytier.easytier.args='--network-name mynet --network-secret s3cret -d'
+uci commit easytier
+/etc/init.d/easytier enable && /etc/init.d/easytier start
+/usr/bin/easytier-cli peer        # 查看组网状态
+```
+
+> ⚠️ v7 的 rootfs 扩到 **3 GiB**（`remake -s 3072`），给 Docker 数据留空间；
+> 若镜像多，建议把 `data_root` 改到大容量存储。
+
 ---
 
 ## 4. 实现细节
