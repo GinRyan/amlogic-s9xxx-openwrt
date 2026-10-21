@@ -242,11 +242,24 @@ v8 在 v7 之上：
 | EasyTier 核心 | `easytier-noweb`（官方 ipk，来自 `EasyTier/luci-app-easytier` 的 `aarch64_generic-22.03.7` 构建） | ImmortalWrt 官方 feed 里没有 easytier，用上游仓库的预编译 ipk（opkg 格式） |
 | EasyTier LuCI | `luci-app-easytier`（同源 ipk） | 菜单：服务 → EasyTier；含状态/CLI/日志/上传等页面 |
 | 中文翻译 | `easytier.zh-cn.lmo`（从 `luci-i18n-easytier-zh-cn` 中只取翻译文件） | i18n ipk 自带的 uci-defaults 与 app 包冲突，故只注入 `.lmo` |
-| 分区工具 | `parted` | 方便在板上调整分区 |
+| 分区工具 | `parted`、`sgdisk` | 方便在板上调整分区 |
 | rootfs 容量 | `remake -s 55296`（54 GiB） | 适配 64 GB eMMC，Docker 数据不再挤在小分区里 |
 
 > ⚠️ v8 的镜像解压后约 **54 GiB**，刷写时整盘写入（`gunzip -c … | dd … bs=4M`），
 > 别用只支持小镜像的工具；64 GB 的 eMMC 能放下还留 ~5 GiB 余量。
+
+v9 又改成"小镜像 + 首次启动自动建数据分区"（日常推荐用它）：
+
+| 项目 | 说明 |
+| --- | --- |
+| 镜像大小 | `remake -s 4096`，raw 约 4.4 GiB / `.img.gz` 约 346 MB |
+| 首次启动 | `/etc/init.d/data-partition`（S90）调用 `/usr/sbin/setup-data-partition`：`sgdisk -e` 修正 GPT 备份头到磁盘末端，再 `sgdisk -n 3:0:0` 把剩余空间建成第 3 分区，`mkfs.btrfs -L DATA`，挂到 `/mnt/data` |
+| Docker 数据 | `/opt/docker` 变成指向 `/mnt/data/docker` 的符号链接，Docker 的数据自然落在数据分区 |
+| 后续启动 | `/etc/config/fstab` 里已写入 `LABEL=DATA → /mnt/data`，开机自动挂载；脚本本身幂等（已格式化就只挂载） |
+| 手动触发 | `setup-data-partition`（无参数自动识别根盘，也可传 `/dev/mmcblk0` 等） |
+
+> 数据分区的创建只在"镜像比介质小"时有意义；如果刷到正好大小的卡上，脚本会因
+> 没有剩余空间而退出（日志在 `/tmp/setup-data.log`），不影响系统启动。
 
 Docker 的 `/etc/config/dockerd` 已预置 `option storage_driver 'btrfs'`（根文件系统是
 btrfs，避免 overlay-on-btrfs 的坑），`data_root` 默认 `/opt/docker/`。开启：
