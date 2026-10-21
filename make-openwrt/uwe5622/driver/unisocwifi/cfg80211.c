@@ -3740,59 +3740,22 @@ sprdwl_cfg80211_dump_survey(struct wiphy *wiphy, struct net_device *ndev,
 			    int idx, struct survey_info *s_info)
 {
 	struct sprdwl_vif *vif = netdev_priv(ndev);
-	struct sprdwl_survey_info *info = NULL;
-	struct sprdwl_bssid *bssid = NULL, *pos = NULL;
-	static int survey_count;
-	int err = 0;
 
-	if (vif->mode != SPRDWL_MODE_AP) {
-		wl_ndev_log(L_DBG, vif->ndev, "Not AP mode, exit %s!\n", __func__);
-		err = -ENOENT;
-		goto out;
-	}
+	/*
+	 * The list based implementation below handed survey->channel pointers to
+	 * cfg80211, which then dereferenced them in nl80211_dump_survey(); on
+	 * real hardware this ended in an "Unable to handle kernel paging
+	 * request" oops (triggered by hostapd's HT_SCAN when starting an AP).
+	 * That oops happens while RTNL is held, so the lock is never released
+	 * and the whole network stack wedges afterwards.
+	 *
+	 * ACS/DFS is not used by this port (the channel is configured in UCI and
+	 * the firmware has no usable survey data), so report "no survey data"
+	 * instead.  hostapd handles -ENOENT by skipping the survey step.
+	 */
+	wl_ndev_log(L_DBG, vif->ndev, "%s: survey not supported\n", __func__);
 
-	if (!list_empty(&vif->survey_info_list)) {
-		info = list_first_entry(&vif->survey_info_list,
-					struct sprdwl_survey_info, survey_list);
-		list_del(&info->survey_list);
-
-		if (info->channel) {
-			s_info->channel = info->channel;
-			s_info->noise = info->noise;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 83)
-			s_info->time = SPRDWL_ACS_SCAN_TIME;
-			s_info->time_busy = info->cca_busy_time;
-			s_info->filled = (SURVEY_INFO_NOISE_DBM |
-					SURVEY_INFO_TIME |
-					SURVEY_INFO_TIME_BUSY);
-#else
-			s_info->channel_time = SPRDWL_ACS_SCAN_TIME;
-			s_info->channel_time_busy = info->cca_busy_time;
-			s_info->filled = (SURVEY_INFO_NOISE_DBM |
-					  SURVEY_INFO_CHANNEL_TIME |
-					  SURVEY_INFO_CHANNEL_TIME_BUSY);
-#endif
-
-			survey_count++;
-		}
-
-		list_for_each_entry_safe(bssid, pos, &info->bssid_list, list) {
-			list_del(&bssid->list);
-			kfree(bssid);
-			bssid = NULL;
-		}
-
-		kfree(info);
-	} else {
-		/* There are no more survey info in list */
-		err = -ENOENT;
-		wl_ndev_log(L_DBG, vif->ndev, "%s report %d surveys\n",
-			    __func__, survey_count);
-		survey_count = 0;
-	}
-
-out:
-	return err;
+	return -ENOENT;
 }
 #endif /* ACS_SUPPORT */
 
