@@ -1,0 +1,179 @@
+#============================================================================================
+# Build a flashable ImmortalWrt image for the Orange Pi 3B (rk3566 + UWE5622) on GitHub Actions.
+#
+# It runs the same pipeline that is documented in make-openwrt/uwe5622/image/README.md:
+#   1. build the two pinned build containers (module builder + image builder);
+#   2. download the ImmortalWrt armsr/armv8 ImageBuilder;
+#   3. fetch the prebuilt EasyTier ipks (not in the ImmortalWrt feeds);
+#   4. build-image.sh : ImageBuilder rootfs (argon/docker/passwall/wpad) + remake
+#      (ophub kernel + u-boot + DT-patched dtb, see the orangepi-3b board hook);
+#   5. finalize-image.sh : inject the first-boot DATA partition scripts, set the
+#      root password, recompress.
+#
+# The produced image is uploaded as a workflow artifact; set "release_tag" to also
+# create a GitHub release with it.
+#============================================================================================
+
+name: Build Orange Pi 3B image (uwe5622)
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: "ophub kernel release"
+        required: true
+        default: "6.12.69"
+        type: string
+      rootfs_mb:
+        description: "rootfs partition size in MiB (the rest of the eMMC becomes the DATA partition on first boot)"
+        required: true
+        default: "4096"
+        type: string
+      tag:
+        description: "image name suffix (openwrt_...wifi-<tag>.img.gz)"
+        required: true
+        default: "v9"
+        type: string
+      release_tag:
+        description: "create a GitHub release with this tag (leave empty to only upload the artifact)"
+        required: false
+        default: ""
+        type: string
+  push:
+    tags:
+      - "opi3b-*"
+
+concurrency:
+  group: opi3b-image-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  IMAGEBUILDER_URL: https://downloads.immortalwrt.org/releases/24.10.2/targets/armsr/armv8/immortalwrt-imagebuilder-24.10.2-armsr-armv8.Linux-x86_64.tar.zst
+  IMAGEBUILDER_DIR: immortalwrt-imagebuilder-24.10.2-armsr-armv8.Linux-x86_64
+  KVER: ${{ github.event.inputs.kernel_version || '6.12.69' }}
+  ROOTFS_MB: ${{ github.event.inputs.rootfs_mb || '4096' }}
+  TAG: ${{ github.event.inputs.tag || 'v9' }}
+  RELEASE_TAG: ${{ github.event.inputs.release_tag || '' }}
+
+jobs:
+  build:
+    # The build assembles a btrfs image with loop devices, so a full Ubuntu runner
+    # is used (not a container job).
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          swap-storage: true
+
+      - name: Prepare loop and btrfs support
+        run: |
+          set -euo pipefail
+          sudo modprobe loop || true
+          sudo modprobe btrfs || true
+          ls -l /dev/loop-control || true
+          sudo losetup -f || true
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check the prebuilt modules for this kernel
+        run: |
+          set -euo pipefail
+          dir="make-openwrt/uwe5622/kmods/${KVER}-rk35xx-ophub"
+          if [ ! -d "${dir}" ]; then
+            echo "ERROR: ${dir} is missing."
+            echo "Rebuild the modules with make-openwrt/uwe5622/image/rebuild-kmods.sh and commit them."
+            exit 1
+          fi
+          ls -l "${dir}"
+
+      - name: Build the build containers
+        run: |
+          set -euo pipefail
+          docker build -t uwe5622-builder:26.04   make-openwrt/uwe5622/docker
+          docker build -t openwrt-image-builder:1 make-openwrt/uwe5622/image
+
+      - name: Download the ImageBuilder
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/build/ib"
+          docker run --rm -v "${RUNNER_TEMP}/build:/build" openwrt-image-builder:1 bash -c '
+            set -euo pipefail
+            cd /build/ib
+            curl -fL --retry 3 -o ib.tar.zst "$0"
+            tar --zstd -xf ib.tar.zst
+            rm -f ib.tar.zst
+            ls -d immortalwrt-imagebuilder-*' "${IMAGEBUILDER_URL}"
+
+      - name: Fetch the EasyTier ipks
+        run: |
+          set -euo pipefail
+          IPK_DIR="${GITHUB_WORKSPACE}/easytier-luci/ipk" \
+            bash make-openwrt/uwe5622/image/fetch-easytier-ipks.sh
+
+      - name: Build the image
+        run: |
+          set -euo pipefail
+          mkdir -p "${GITHUB_WORKSPACE}/out"
+          docker run --rm --privileged \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -v "${RUNNER_TEMP}/build:/build" \
+            -e WORK=/work \
+            -e REPO=/work \
+            -e OUT=/work/out \
+            -e IPK_DIR=/work/easytier-luci/ipk \
+            -e IB="/build/ib/${IMAGEBUILDER_DIR}" \
+            -e KVER="${KVER}" \
+            -e ROOTFS_MB="${ROOTFS_MB}" \
+            -e TAG="${TAG}" \
+            openwrt-image-builder:1 \
+            bash /work/make-openwrt/uwe5622/image/build-image.sh
+
+      - name: Finalize the image
+        run: |
+          set -euo pipefail
+          docker run --rm --privileged \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -e OUT=/work/out \
+            -e KVER="${KVER}" \
+            -e TAG="${TAG}" \
+            openwrt-image-builder:1 \
+            bash /work/make-openwrt/uwe5622/image/finalize-image.sh
+
+      - name: Upload the image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-orangepi-3b-${{ env.TAG }}
+          path: |
+            out/*.img.gz
+            out/*.img.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Create a release
+        if: ${{ env.RELEASE_TAG != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Orange Pi 3B ${{ env.TAG }} (kernel ${{ env.KVER }})
+          body: |
+            ImmortalWrt image for the Orange Pi 3B v1.1 (rk3566 + UWE5622).
+
+            * kernel: ${{ env.KVER }} (ophub, rk35xx)
+            * rootfs: ${{ env.ROOTFS_MB }} MiB, the remaining eMMC space becomes a
+              btrfs `DATA` partition on first boot (`/mnt/data`, Docker data-root)
+            * packages: wpad-openssl, wifi-scripts, iwinfo, iw, passwall,
+              luci-theme-argon, docker/dockerd/compose + luci-app-dockerman,
+              EasyTier + luci-app-easytier
+            * root password: `password` (change it after the first login)
+          files: |
+            out/*.img.gz
+            out/*.img.gz.sha256
+          generate_release_notes: false

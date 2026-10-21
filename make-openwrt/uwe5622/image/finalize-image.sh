@@ -113,4 +113,4 @@ echo "=== recompressing + checksums ==="
 gzip -9 -c "${img}" >"${OUT}/${name}.img.gz"
 rm -f "${img}"
 ls -lh "${OUT}/${name}.img.gz"
-sha256sum "${OUT}/${name}.img.gz"
+( cd "${OUT}" && sha256sum "${name}.img.gz" | tee "${name}.img.gz.sha256" )

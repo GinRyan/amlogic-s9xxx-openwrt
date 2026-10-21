@@ -292,6 +292,49 @@ EasyTier 在 LuCI 的「服务 → EasyTier」里配置并启用（底层是 `/e
 /usr/bin/easytier-cli peer        # 查看组网状态
 ```
 
+### 3.5 Docker 构建镜像与 GitHub Actions
+
+**两个固定的构建容器**（构建命令不随版本变化，版本差异只通过环境变量表达）：
+
+| 镜像 | Dockerfile | 用途 | 构建 |
+| --- | --- | --- | --- |
+| `uwe5622-builder:26.04` | `make-openwrt/uwe5622/docker/Dockerfile` | 交叉编译内核模块（Ubuntu 26.04 / GCC 15，基镜像按 digest 固定） | `docker build -t uwe5622-builder:26.04 make-openwrt/uwe5622/docker`，或直接 `docker/build-in-docker.sh` |
+| `openwrt-image-builder:1` | `make-openwrt/uwe5622/image/Dockerfile` | ImageBuilder + `remake` 打包（loop 设备、mkfs、parted、gdisk） | `docker build -t openwrt-image-builder:1 make-openwrt/uwe5622/image` |
+
+镜像构建命令永远只有两条（见 `make-openwrt/uwe5622/image/README.md`）：
+
+```bash
+docker run --rm --privileged ... openwrt-image-builder:1 bash .../image/build-image.sh
+docker run --rm --privileged ... openwrt-image-builder:1 bash .../image/finalize-image.sh
+```
+
+v7/v8/v9 的差别只体现在环境变量上：`KVER`（6.12.69）、`ROOTFS_MB`（v7=3072、
+v8=55296、v9=4096）、`TAG`（v7/v8/v9），以及 EasyTier ipk 的 `IPK_DIR`。所以不再需要
+"每个版本复制一份脚本"。
+
+**哪些是自动的、哪些不是**：
+
+| 步骤 | 是否自动 |
+| --- | --- |
+| DT overlay 打补丁、安装 uwe5622 模块、`depmod` | ✅ 自动：`remake` 在 `replace_kernel()` 末尾 source `different-files/<board>/rootfs/etc/openwrt-board-release.conf`，对 `-b orangepi-3b` 生效 |
+| Argon / Docker / passwall / wpad 包、EasyTier ipk | ✅ 由 `image/build-image.sh` 的 `PACKAGES=` 完成（v7 起） |
+| 首次启动建 DATA 分区、Docker 数据目录、EasyTier 中文翻译 | ✅ 由 `image/finalize-image.sh` 注入 `image/extra-rootfs/`（v9 起） |
+| 编译模块 | ❌ 需要手动/CI 触发（`image/rebuild-kmods.sh`），因为模块必须和内核版本严格匹配；结果提交在 `make-openwrt/uwe5622/kmods/<release>/` |
+
+**GitHub Actions**：新增 `.github/workflows/build-orangepi-3b-image.yml`，把上面整条链路
+串起来（手动触发，参数：`kernel_version` / `rootfs_mb` / `tag` / 可选 `release_tag`）。
+它会在 runner 上构建两个容器、下载 ImageBuilder、拉取 EasyTier ipk、跑 `build-image.sh`
+与 `finalize-image.sh`，产物上传为 artifact；填了 `release_tag` 时同时发 Release。
+
+**只对 Orange Pi 3B 生效的条件编译**：板级钩子文件只存在于
+`make-openwrt/openwrt-files/different-files/orangepi-3b/rootfs/etc/openwrt-board-release.conf`，
+`remake` 只 source 当前 `-b <board>` 对应的那个文件（`board_release="${different_files}/${board}/rootfs/..."`）。
+所以：
+
+- 编译其他机型时，**不会**打 uwe5622 的 DT overlay、**不会**安装 `sprdwl_ng.ko` 等模块；
+- 驱动源码目录（`make-openwrt/uwe5622/driver`）只被这个钩子引用，没有任何全局 Kconfig/配置会把它编进别的机型；
+- 模块本身按**内核版本**编译（`build-kmods.sh -v 6.12.69 -t rk35xx`），与板子无关，但"打包进镜像"这一步严格按板子条件执行。
+
 ---
 
 ## 4. 实现细节
