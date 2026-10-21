@@ -9,7 +9,8 @@
 | --- | --- |
 | `Dockerfile` | `openwrt-image-builder:1` 镜像：在 `uwe5622-builder:26.04` 上加 loop 设备/mkfs/parted/rsync 等 `remake` 运行时依赖 |
 | `build-image.sh` | ImageBuilder 生成 rootfs（含 Argon/Docker/passwall/EasyTier ipk）→ `remake` 打内核/u-boot/DTB → 输出 `*.img.gz` |
-| `finalize-image.sh` | 校验镜像（模块 vermagic、dtb、包）、注入 `extra-rootfs/`、设 root 密码、重新压缩并算 sha256 |
+| `finalize-image.sh` | 校验镜像（模块 vermagic、dtb、包）、注入 `extra-rootfs/`、设 root 密码、重新压缩并算 sha256（有 `pigz` 时用多线程压缩/解压） |
+| `verify-image.sh` | 解包最终镜像并断言注入的文件/模块/密码都在（workflow 里作为发布前检查） |
 | `fetch-easytier-ipks.sh` | 从 `EasyTier/luci-app-easytier` 的 release 下载 `easytier-noweb`/`luci-app-easytier` ipk 和 zh-cn 翻译 |
 | `rebuild-kmods.sh` | 在固定容器里重编 `sprdwl_ng.ko` 等（等价于 `../docker/build-in-docker.sh`） |
 | `extra-rootfs/` | 注入镜像的额外文件（见下） |

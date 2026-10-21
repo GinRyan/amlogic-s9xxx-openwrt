@@ -35,7 +35,8 @@ img="${OUT}/${name}.img"
 [ -f "${src}" ] || { echo "FATAL: ${src} not found (run build-image.sh first)"; exit 1; }
 
 echo "=== decompressing ${src} ==="
-gunzip -c "${src}" >"${img}"
+# pigz is much faster on a multi-core CI runner (gzip is the fallback).
+if command -v pigz >/dev/null 2>&1; then pigz -dc "${src}" >"${img}"; else gunzip -c "${src}" >"${img}"; fi
 
 L="$(command -v losetup)"
 loop="$("${L}" -P -f --show "${img}")"
@@ -110,7 +111,11 @@ umount /mnt/ir /mnt/ib
 losetup -d "${loop}"
 
 echo "=== recompressing + checksums ==="
-gzip -9 -c "${img}" >"${OUT}/${name}.img.gz"
+if command -v pigz >/dev/null 2>&1; then
+    pigz -9 -c "${img}" >"${OUT}/${name}.img.gz"
+else
+    gzip -9 -c "${img}" >"${OUT}/${name}.img.gz"
+fi
 rm -f "${img}"
 ls -lh "${OUT}/${name}.img.gz"
 ( cd "${OUT}" && sha256sum "${name}.img.gz" | tee "${name}.img.gz.sha256" )

@@ -147,6 +147,17 @@ jobs:
             openwrt-image-builder:1 \
             bash /work/make-openwrt/uwe5622/image/finalize-image.sh
 
+      - name: Verify the image 
+        run: |
+          set -euo pipefail
+          docker run --rm --privileged \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -e OUT=/work/out \
+            -e KVER="${KVER}" \
+            -e TAG="${TAG}" \
+            openwrt-image-builder:1 \
+            bash /work/make-openwrt/uwe5622/image/verify-image.sh
+
       - name: Upload the image artifact
         uses: actions/upload-artifact@v4
         with:
