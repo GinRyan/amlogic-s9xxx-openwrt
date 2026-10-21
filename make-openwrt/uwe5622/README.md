@@ -225,7 +225,7 @@ board 选 `orangepi-3b`），产物在 Release 里（tag `OpenWrt_<branch>_<stor
 `/dev/loopXpN` 不会自动出现，需要一个 `losetup` 包装脚本按 `/sys/class/block/...`
 建好节点。arm64 模块仍然按 `3.1` 交叉编译。
 
-### 3.4 v7 镜像附带的额外组件（Argon / Docker / EasyTier）
+### 3.4 v7 / v8 镜像附带的额外组件（Argon / Docker / EasyTier）
 
 v7 在 v6（驱动修复版）的基础上预装了：
 
@@ -234,7 +234,19 @@ v7 在 v6（驱动修复版）的基础上预装了：
 | LuCI Argon 主题 | `luci-theme-argon`、`luci-app-argon-config`、`luci-i18n-argon-config-zh-cn` | 来自 luci feed；LuCI → 系统 → 语言和界面里选 Argon |
 | Docker | `docker`、`dockerd`、`containerd`、`docker-compose`、`luci-app-dockerman` | 内核 6.12.69 的 cgroup2/namespace/overlay/veth/netfilter 模块齐全 |
 | cgroup 挂载 | `cgroupfs-mount` | 容器内 OpenWrt 默认不挂 cgroup2，这个包负责挂载 |
-| EasyTier | `/usr/bin/easytier-core`、`/usr/bin/easytier-cli` + `/etc/init.d/easytier` + `/etc/config/easytier` | ImmortalWrt feed 里**没有** easytier 的 ipk，直接用官方静态二进制（aarch64）烘进镜像 |
+
+v8 在 v7 之上：
+
+| 组件 | 包 / 文件 | 备注 |
+| --- | --- | --- |
+| EasyTier 核心 | `easytier-noweb`（官方 ipk，来自 `EasyTier/luci-app-easytier` 的 `aarch64_generic-22.03.7` 构建） | ImmortalWrt 官方 feed 里没有 easytier，用上游仓库的预编译 ipk（opkg 格式） |
+| EasyTier LuCI | `luci-app-easytier`（同源 ipk） | 菜单：服务 → EasyTier；含状态/CLI/日志/上传等页面 |
+| 中文翻译 | `easytier.zh-cn.lmo`（从 `luci-i18n-easytier-zh-cn` 中只取翻译文件） | i18n ipk 自带的 uci-defaults 与 app 包冲突，故只注入 `.lmo` |
+| 分区工具 | `parted` | 方便在板上调整分区 |
+| rootfs 容量 | `remake -s 55296`（54 GiB） | 适配 64 GB eMMC，Docker 数据不再挤在小分区里 |
+
+> ⚠️ v8 的镜像解压后约 **54 GiB**，刷写时整盘写入（`gunzip -c … | dd … bs=4M`），
+> 别用只支持小镜像的工具；64 GB 的 eMMC 能放下还留 ~5 GiB 余量。
 
 Docker 的 `/etc/config/dockerd` 已预置 `option storage_driver 'btrfs'`（根文件系统是
 btrfs，避免 overlay-on-btrfs 的坑），`data_root` 默认 `/opt/docker/`。开启：
@@ -244,18 +256,13 @@ btrfs，避免 overlay-on-btrfs 的坑），`data_root` 默认 `/opt/docker/`。
 docker run --rm hello-world
 ```
 
-EasyTier 开启（默认 `enabled '0'`）：
+EasyTier 在 LuCI 的「服务 → EasyTier」里配置并启用（底层是 `/etc/init.d/easytier`
++ `/etc/config/easytier`，命令行方式同样可用）：
 
 ```sh
-uci set easytier.easytier.enabled='1'
-uci set easytier.easytier.args='--network-name mynet --network-secret s3cret -d'
-uci commit easytier
 /etc/init.d/easytier enable && /etc/init.d/easytier start
 /usr/bin/easytier-cli peer        # 查看组网状态
 ```
-
-> ⚠️ v7 的 rootfs 扩到 **3 GiB**（`remake -s 3072`），给 Docker 数据留空间；
-> 若镜像多，建议把 `data_root` 改到大容量存储。
 
 ---
 
